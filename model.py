@@ -70,7 +70,7 @@ def print_system_info():
     if gpus:
         print("\n>>> Running with GPU available <<<  ({})\n".format(platform.platform()))
     else:
-        print("\n@@@ NO GPU @@@\n")
+        print("\n@@@ NO GPU @@@  ({})\n".format(platform.platform()))
 
 
     # Call the functions to get detailed CPU and GPU information
