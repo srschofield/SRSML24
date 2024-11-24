@@ -42,29 +42,29 @@ def print_system_info():
     Also prints CPU and relevant GPU information.
     """
     # Print Python version
-    print(f"Python version: {sys.version}")
+    print(f"\nPython version: {sys.version}")
     
     # Print TensorFlow version
     print(f"TensorFlow version: {tf.__version__}")
+    # Check TensorFlow build information
+    print(f"TensorFlow is built with CUDA: {tf.test.is_built_with_cuda()}")
+    print(f"TensorFlow is built with ROCm: {tf.test.is_built_with_rocm()}")
     
     # Print system information
-    print(f"System: {platform.system()} {platform.release()} ({platform.machine()})")
+    print(f"\nSystem: {platform.system()} {platform.release()} ({platform.machine()})")
     print(f"Platform: {platform.platform()}")
     print(f"Processor: {platform.processor()}")
     
     # Check if TensorFlow is using GPU
     gpus = tf.config.list_physical_devices('GPU')
     if gpus:
-        print(f"Number of GPUs available to TensorFlow: {len(gpus)}")
+        print(f"\nNumber of GPUs available to TensorFlow: {len(gpus)}")
         for gpu in gpus:
             print(f"GPU Device: {gpu}")
-        print("CUDA is being used for TensorFlow.")
     else:
         print("No GPU available, TensorFlow running on CPU")
     
-    # Check TensorFlow build information
-    print(f"TensorFlow is built with CUDA: {tf.test.is_built_with_cuda()}")
-    print(f"TensorFlow is built with ROCm: {tf.test.is_built_with_rocm()}")
+
 
     # Print summary of GPU availability
     if gpus:
@@ -72,84 +72,6 @@ def print_system_info():
     else:
         print("\n@@@ NO GPU @@@  ({})\n".format(platform.platform()))
 
-
-    # Call the functions to get detailed CPU and GPU information
-    #get_detailed_cpu_info()
-    #get_detailed_gpu_info()
-
-
-
-# FOR LINUX
-def get_detailed_cpu_info():
-    """
-    Retrieves detailed CPU information using lscpu on Linux.
-    """
-    try:
-        # Get detailed CPU info using lscpu
-        cpu_info = subprocess.check_output(["lscpu"]).decode("utf-8")
-        print("\nDetailed CPU Information:")
-        print(cpu_info)
-    except Exception as e:
-        print(f"Could not retrieve detailed CPU info: {e}")
-
-
-
-def get_detailed_gpu_info():
-    """
-    Retrieves detailed GPU information using nvidia-smi on Linux.
-    """
-    try:
-        # Get GPU information using nvidia-smi
-        gpu_info = subprocess.check_output(["nvidia-smi"]).decode("utf-8")
-        print("\nDetailed GPU Information:")
-        print(gpu_info)
-    except Exception as e:
-        print(f"Could not retrieve detailed GPU info: {e}")
-
-# FOR MAC
-# def get_detailed_cpu_info():
-#     """
-#     Retrieves detailed CPU information from macOS using sysctl.
-#     """
-#     try:
-#         # Get CPU brand and core count using sysctl
-#         cpu_brand = subprocess.check_output(["sysctl", "-n", "machdep.cpu.brand_string"]).decode("utf-8").strip()
-#         cpu_cores = subprocess.check_output(["sysctl", "-n", "hw.ncpu"]).decode("utf-8").strip()
-        
-#         print("\nDetailed CPU Information:")
-#         print(f"CPU Model: {cpu_brand}")
-#         print(f"Total Number of Cores: {cpu_cores}")
-        
-#     except Exception as e:
-#         print(f"Could not retrieve detailed CPU info: {e}")
-
-# def get_detailed_gpu_info():
-#     """
-#     Retrieves detailed GPU information from macOS system_profiler, excluding display info.
-#     """
-#     try:
-#         # Run system_profiler and decode the output
-#         gpu_info = subprocess.check_output(["system_profiler", "SPDisplaysDataType"]).decode("utf-8")
-
-#         # Filter out lines related to "Display" and only include lines with "Chipset Model", "Core", and "Metal"
-#         filtered_gpu_info = []
-#         include_info = False
-#         for line in gpu_info.splitlines():
-#             line = line.strip()
-#             if "Chipset Model" in line or "Total Number of Cores" in line or "Metal" in line:
-#                 include_info = True  # Start including relevant GPU info
-#             if "Displays:" in line:  # Stop when display information starts
-#                 include_info = False
-#             if include_info:
-#                 filtered_gpu_info.append(line)
-
-#         # Print the filtered GPU information
-#         print("\nRelevant GPU Information (from system profiler):")
-#         for info in filtered_gpu_info:
-#             print(info)
-
-    except Exception as e:
-        print(f"Could not retrieve detailed GPU info: {e}")
 
 
 # ============================================================================
