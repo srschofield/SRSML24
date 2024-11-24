@@ -68,7 +68,7 @@ def print_system_info():
 
     # Print summary of GPU availability
     if gpus:
-        print("\n>>> Running with GPU available <<<\n")
+        print("\n>>> Running with GPU available <<<  ({})\n".format(platform.platform()))
     else:
         print("\n@@@ NO GPU @@@\n")
 

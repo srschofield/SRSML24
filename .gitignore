@@ -2,3 +2,9 @@ __pycache__/
 *.pyc
 *.npy
 *.log
+
+# macOS system files
+.DS_Store
+._* 
+._* 
+__MACOSX/
