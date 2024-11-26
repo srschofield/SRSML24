@@ -25,7 +25,7 @@ from matplotlib import colormaps  # Import the new colormap module
 # General Image stuff
 # ============================================================================
 
-def load_grayscale_image(filepath):
+def load_jpg_as_norm_numpy(filepath):
     """
     Load a JPEG image, convert it to grayscale, and return a flat 2D NumPy array.
     
