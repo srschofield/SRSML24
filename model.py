@@ -149,34 +149,6 @@ def create_tf_dataset(file_paths, batch_size=16, buffer_size=1000, is_autoencode
     return dataset
 
 
-# Define a function to load and preprocess batched numpy data
-def load_batched_numpy_file(file_path, window_size=32):
-    """
-    Load a batched numpy file, ensuring correct shape by adding a channel dimension if missing.
-
-    Args:
-        file_path (tf.Tensor): Path to the `.npy` file.
-        window_size (int): The size of the square window.
-
-    Returns:
-        np.ndarray: Loaded and preprocessed batch of windows.
-    """
-    try:
-        file_path = file_path.numpy().decode('utf-8')  # Convert to string
-        batch = np.load(file_path)  # Load the numpy file
-
-        # Check the shape and add the channel dimension if missing
-        if batch.ndim == 3 and batch.shape[1:] == (window_size, window_size):  # Shape (N, window_size, window_size)
-            batch = np.expand_dims(batch, axis=-1)  # Add channel dimension
-        elif batch.ndim != 4 or batch.shape[1:] != (window_size, window_size, 1):
-            raise ValueError(f"Invalid batch shape: {batch.shape}")
-
-        return batch.astype(np.float32)  # Ensure float32 for TensorFlow
-    except Exception as e:
-        print(f"Error loading file {file_path}: {e}")
-        print('Please check that the data has window_size ({},{}). Possible mismatch with supplied data: {}'.format(window_size,window_size,batch.shape[1:]))
-        return np.zeros((0, window_size, window_size, 1), dtype=np.float32)  # Empty batch
-
 
 # Define a function to create a TensorFlow dataset from file paths (batched data)
 def create_tf_dataset_batched(file_paths, batch_size=16, buffer_size=1000, is_autoencoder=True, shuffle=True, window_size=32):
@@ -194,6 +166,35 @@ def create_tf_dataset_batched(file_paths, batch_size=16, buffer_size=1000, is_au
     Returns:
         tf.data.Dataset: The created TensorFlow dataset.
     """
+
+    # Define a function to load and preprocess batched numpy data
+    def load_batched_numpy_file(file_path, window_size=32):
+        """
+        Load a batched numpy file, ensuring correct shape by adding a channel dimension if missing.
+
+        Args:
+            file_path (tf.Tensor): Path to the `.npy` file.
+            window_size (int): The size of the square window.
+
+        Returns:
+            np.ndarray: Loaded and preprocessed batch of windows.
+        """
+        try:
+            file_path = file_path.numpy().decode('utf-8')  # Convert to string
+            batch = np.load(file_path)  # Load the numpy file
+
+            # Check the shape and add the channel dimension if missing
+            if batch.ndim == 3 and batch.shape[1:] == (window_size, window_size):  # Shape (N, window_size, window_size)
+                batch = np.expand_dims(batch, axis=-1)  # Add channel dimension
+            elif batch.ndim != 4 or batch.shape[1:] != (window_size, window_size, 1):
+                raise ValueError(f"Invalid batch shape: {batch.shape}")
+
+            return batch.astype(np.float32)  # Ensure float32 for TensorFlow
+        except Exception as e:
+            print(f"Error loading file {file_path}: {e}")
+            print('Please check that the data has window_size ({},{}). Possible mismatch with supplied data: {}'.format(window_size,window_size,batch.shape[1:]))
+            return np.zeros((0, window_size, window_size, 1), dtype=np.float32)  # Empty batch
+
     # Define a helper function to load batched numpy files
     def load_numpy_as_tensor(file_path):
         return tf.py_function(func=lambda fp: load_batched_numpy_file(fp, window_size), inp=[file_path], Tout=tf.float32)
@@ -726,14 +727,14 @@ def display_reconstructed_and_cluster_images(reconstructed_img, cluster_img, sho
     
 #     print(f"\nLatent features have been saved to {features_path} in grouped batch files.")
 
-
-
 def extract_latent_features_to_disk_from_prebatched_windows(
     autoencoder_model,
     dataset,
     features_path,
-    features_name='latent_features'
-):
+    bottleneck_layer_name='Bottleneck',
+    features_name='latent_features',
+    return_array=False,
+    verbose=False):
     """
     Extracts latent features from a pre-batched TensorFlow dataset, where each batch is processed
     and saved directly as a corresponding batch of latent features.
@@ -742,68 +743,108 @@ def extract_latent_features_to_disk_from_prebatched_windows(
     - autoencoder_model: The trained autoencoder model to extract latent features.
     - dataset: The TensorFlow dataset containing pre-batched input windows.
     - features_path: The directory where latent features should be saved.
+    - bottleneck_layer_name: The name of the bottleneck layer in the autoencoder model.
     - features_name: The base name for the saved feature files.
+    - verbose: Whether to print progress information.
 
     Structure of Saved Data:
     - Each batch is saved as a .npy file containing a 2D NumPy array.
     - Shape: (batch_size, latent_dim), where:
         - batch_size is the number of samples in the batch.
-        - latent_dim is the dimensionality of the bottleneck layer in the autoencoder.
+        - latent_dim is the flattened size of the bottleneck layer.
     - Each row represents the latent feature vector for a single input window.
     """
-    # Create encoder model to extract latent space from the 'Bottleneck' layer
+    # Create encoder model to extract latent space from the specified bottleneck layer
     encoder_model = tf.keras.Model(
         inputs=autoencoder_model.input,
-        outputs=autoencoder_model.get_layer('Bottleneck').output
+        outputs=autoencoder_model.get_layer(bottleneck_layer_name).output
     )
-    
-    # Ensure the output directory exists
-    if not os.path.exists(features_path):
-        os.makedirs(features_path)
 
-    # Process each pre-batched input and save latent features directly
+    if return_array:
+        latent_features_all = []
+    else:
+        # Ensure the output directory exists
+        if not os.path.exists(features_path):
+            os.makedirs(features_path)
+
+    # Process each batch in the dataset
     for i, batch in enumerate(dataset):
-        inputs = batch[0]  # Extract inputs, ignoring labels if present
-        batch_shape = inputs.shape
-        print(f"Processing batch {i + 1}, shape: {batch_shape}")
+        inputs = batch if isinstance(batch, tf.Tensor) else batch[0]  # Handle datasets with or without labels
+        batch_shape = tf.shape(inputs).numpy()
+        if verbose: 
+            print(f"Processing batch {i + 1}, input shape: {batch_shape}")
         
         # Compute latent features for the current batch
         latent_features_batch = encoder_model.predict(inputs, verbose=0)
         
-        # Save the latent features batch to disk
-        file_path = os.path.join(features_path, f"{features_name}_batch_{i}.npy")
-        np.save(file_path, latent_features_batch)
-        print(f"Saved latent features for batch {i + 1} to {file_path}")
+        # Flatten latent features if necessary
+        if len(latent_features_batch.shape) > 2:
+            flattened_latent_features = tf.reshape(
+                latent_features_batch, 
+                [latent_features_batch.shape[0], -1]
+            ).numpy()
+        else:
+            flattened_latent_features = latent_features_batch
+        
+        # Validate output shape (N, M)
+        latent_shape = flattened_latent_features.shape
 
-    print(f"\nAll latent features have been saved to {features_path}.")
+        if i==0: 
+            sample_batch_shape = flattened_latent_features.shape
 
-
-def extract_latent_features_to_array(autoencoder_model, input_data):
-    """
-    Extracts latent features from an individual input (or batch of inputs) and returns them as a NumPy array.
-
-    Parameters:
-    - autoencoder_model: The trained autoencoder model to extract latent features.
-    - input_data: A single input or a batch of inputs for which to extract latent features.
-
-    Returns:
-    - np.ndarray: A 2D NumPy array containing the latent feature vectors.
-                  Shape: (num_samples, latent_dim), where num_samples is the number of samples in input_data.
-    """
-    # Create encoder model to extract latent space from 'Bottleneck' layer
-    encoder_model = tf.keras.Model(
-        inputs=autoencoder_model.input,
-        outputs=autoencoder_model.get_layer('Bottleneck').output
-    )
+        if verbose:
+            print(f"Latent features shape for batch {i + 1}: {latent_shape}")
+        else:
+            if i>0 and i%100==0:
+                print(i,)
+            else:
+                print('.',end='')
+        
+        if return_array:
+            latent_features_all.append(flattened_latent_features)
+        else:
+            # Save the latent features batch to disk
+            file_path = os.path.join(features_path, f"{features_name}_batch_{i}.npy")
+            np.save(file_path, flattened_latent_features)
+            if verbose:
+              print(f"Saved latent features for batch {i + 1} to {file_path}")
     
-    # Predict latent features for the input data
-    latent_features = encoder_model.predict(input_data, verbose=0)
+    if return_array:
+        # Combine all latent features into a single array
+        latent_features_all = np.concatenate(latent_features_all, axis=0)
+        print(f"Combined latent features shape: {latent_features_all.shape}")
+        return latent_features_all, latent_features_all.shape[0]
+    else:
+        print(f"\nAll latent features have been saved to {features_path}.")
+        print(f"Sample batch shape: {sample_batch_shape}")
+
+
+# def extract_latent_features_to_array(autoencoder_model, input_data):
+#     """
+#     Extracts latent features from an individual input (or batch of inputs) and returns them as a NumPy array.
+
+#     Parameters:
+#     - autoencoder_model: The trained autoencoder model to extract latent features.
+#     - input_data: A single input or a batch of inputs for which to extract latent features.
+
+#     Returns:
+#     - np.ndarray: A 2D NumPy array containing the latent feature vectors.
+#                   Shape: (num_samples, latent_dim), where num_samples is the number of samples in input_data.
+#     """
+#     # Create encoder model to extract latent space from 'Bottleneck' layer
+#     encoder_model = tf.keras.Model(
+#         inputs=autoencoder_model.input,
+#         outputs=autoencoder_model.get_layer('Bottleneck').output
+#     )
     
-    # Flatten latent features to 2D if necessary
-    latent_features_flat = latent_features.reshape(latent_features.shape[0], -1)
+#     # Predict latent features for the input data
+#     latent_features = encoder_model.predict(input_data, verbose=0)
     
-    num_features = len(latent_features_flat)
-    return latent_features_flat, num_features
+#     # Flatten latent features to 2D if necessary
+#     latent_features_flat = latent_features.reshape(latent_features.shape[0], -1)
+    
+#     num_features = len(latent_features_flat)
+#     return latent_features_flat, num_features
 
 
 def create_latent_features_tf_dataset(latent_feature_files, batch_size=32, shuffle=False, shuffle_buffer_size=1000):
@@ -918,43 +959,43 @@ def create_latent_features_tf_dataset(latent_feature_files, batch_size=32, shuff
 #     return data_pipeline
 
 
-def create_latent_features_tf_dataset_from_array(latent_features_array, batch_size=32):
-    """
-    Creates a TensorFlow data pipeline from a NumPy array of latent features, preparing them
-    for clustering or further analysis in batches.
+# def create_latent_features_tf_dataset_from_array(latent_features_array, batch_size=32):
+#     """
+#     Creates a TensorFlow data pipeline from a NumPy array of latent features, preparing them
+#     for clustering or further analysis in batches.
 
-    Parameters:
-    -----------
-    latent_features_array : np.ndarray
-        A NumPy array containing latent features, with shape (N, M), where N is the number of samples,
-        and M is the dimensionality of the latent features.
-    batch_size : int, optional
-        The number of latent feature vectors to include in each batch. Default is 32.
+#     Parameters:
+#     -----------
+#     latent_features_array : np.ndarray
+#         A NumPy array containing latent features, with shape (N, M), where N is the number of samples,
+#         and M is the dimensionality of the latent features.
+#     batch_size : int, optional
+#         The number of latent feature vectors to include in each batch. Default is 32.
 
-    Returns:
-    --------
-    tf.data.Dataset
-        A TensorFlow Dataset object that yields batches of latent features, each with shape
-        (batch_size, M), where M is the dimensionality of the features. The dataset is configured to
-        prefetch batches for optimized loading performance.
-    """
-    # Ensure the input is a NumPy array
-    if not isinstance(latent_features_array, np.ndarray):
-        raise ValueError("latent_features_array must be a NumPy array")
+#     Returns:
+#     --------
+#     tf.data.Dataset
+#         A TensorFlow Dataset object that yields batches of latent features, each with shape
+#         (batch_size, M), where M is the dimensionality of the features. The dataset is configured to
+#         prefetch batches for optimized loading performance.
+#     """
+#     # Ensure the input is a NumPy array
+#     if not isinstance(latent_features_array, np.ndarray):
+#         raise ValueError("latent_features_array must be a NumPy array")
 
-    # Convert the NumPy array to a TensorFlow dataset
-    data_pipeline = tf.data.Dataset.from_tensor_slices(latent_features_array)
+#     # Convert the NumPy array to a TensorFlow dataset
+#     data_pipeline = tf.data.Dataset.from_tensor_slices(latent_features_array)
     
-    # Batch and prefetch the data
-    data_pipeline = data_pipeline.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+#     # Batch and prefetch the data
+#     data_pipeline = data_pipeline.batch(batch_size).prefetch(tf.data.AUTOTUNE)
 
-    # Print details about the created pipeline
-    print(f"Data pipeline created from NumPy array with shape {latent_features_array.shape}, batch size: {batch_size}")
+#     # Print details about the created pipeline
+#     print(f"Data pipeline created from NumPy array with shape {latent_features_array.shape}, batch size: {batch_size}")
    
-    for batch in data_pipeline.take(1):  # Preview the first batch
-        print(f"Batch shape: {batch.shape}")
+#     for batch in data_pipeline.take(1):  # Preview the first batch
+#         print(f"Batch shape: {batch.shape}")
     
-    return data_pipeline
+#     return data_pipeline
 
 
 def train_kmeans(data_pipeline, batch_size=2048, num_clusters=10, n_init=10, max_iter=300, reassignment_ratio=0.01):
