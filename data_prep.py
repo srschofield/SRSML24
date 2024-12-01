@@ -41,6 +41,8 @@ from datetime import datetime
 
 from concurrent.futures import ThreadPoolExecutor
 
+from scipy.signal import savgol_filter
+
 # ============================================================================
 # Google Colab
 # ============================================================================
@@ -1008,6 +1010,99 @@ def load_n_numpy_files(file_paths, N, mode='sequential', start_index=0):
 # Image manipulation and viewing
 # ============================================================================
 
+def flatten_image_with_row_and_plane(image):
+    """
+    Flatten an image by performing line-wise mean subtraction 
+    followed by a global first-order plane subtraction.
+
+    Parameters:
+        image (numpy.ndarray): Input 2D image array.
+
+    Returns:
+        numpy.ndarray: Flattened image.
+    """
+    # Step 1: Line-wise mean subtraction
+    row_means = np.mean(image, axis=1, keepdims=True)
+    image_line_flattened = image - row_means
+
+    # Step 2: Fit a first-order plane to the entire image
+    x, y = np.meshgrid(np.arange(image.shape[1]), np.arange(image.shape[0]))
+    x_flat, y_flat = x.ravel(), y.ravel()
+    z_flat = image_line_flattened.ravel()
+
+    # Solve for plane coefficients (z = ax + by + c)
+    A = np.vstack([x_flat, y_flat, np.ones_like(x_flat)]).T
+    coeffs, _, _, _ = np.linalg.lstsq(A, z_flat, rcond=None)
+    a, b, c = coeffs
+
+    # Create the plane to subtract
+    plane = (a * x + b * y + c)
+
+    # Subtract the plane
+    image_plane_flattened = image_line_flattened - plane
+
+    return image_plane_flattened
+
+
+def flatten_image_by_row_advanced(image, polyorder=0, window_length=11):
+    """
+    Not working currently
+    Flatten an image row-wise using a Savitzky-Golay filter.
+
+    Parameters:
+        image (numpy.ndarray): Input 2D image array.
+        polyorder (int): Polynomial order for the filter.
+        window_length (int): Length of the filter window (must be odd).
+
+    Returns:
+        numpy.ndarray: Row-flattened image.
+    """
+    flattened_image = np.empty_like(image)
+    for i, row in enumerate(image):
+        baseline = savgol_filter(row, window_length=window_length, polyorder=polyorder)
+        flattened_image[i] = row - baseline
+    return flattened_image
+
+
+def flatten_by_row_mean_and_slope(image):
+    """
+    Flatten an image by subtracting the row mean and slope from each row.
+
+    Parameters:
+        image (numpy.ndarray): Input 2D image array.
+
+    Returns:
+        numpy.ndarray: Row-flattened image.
+    """
+    flattened_image = np.empty_like(image)
+    x = np.arange(image.shape[1])  # x-coordinates for fitting
+
+    for i, row in enumerate(image):
+        # Perform a linear fit (y = mx + c)
+        slope, intercept = np.polyfit(x, row, deg=1)
+        # Calculate the linear trend
+        trend = slope * x + intercept
+        # Subtract the trend from the row
+        flattened_image[i] = row - trend
+
+    return flattened_image
+
+
+def flatten_by_row_mean(image):
+    """
+    Flatten an image by subtracting the row mean from each row.
+
+    Parameters:
+        image (numpy.ndarray): Input 2D image array.
+
+    Returns:
+        numpy.ndarray: Row-flattened image.
+    """
+    row_means = np.mean(image, axis=1, keepdims=True)
+    flattened_image = image - row_means
+    return flattened_image
+
+
 def flatten_image_data(img, flatten_method='iterate_mask'):
     """
     Flatten image data using the specified method.
@@ -1024,6 +1119,13 @@ def flatten_image_data(img, flatten_method='iterate_mask'):
         img, mask, n = spiepy.flatten_by_iterate_mask(img)
     elif flatten_method == "poly_xy":
         img, _ = spiepy.flatten_poly_xy(img, deg=1)
+    elif flatten_method == "row_mean":
+        img = flatten_by_row_mean(img)
+    elif flatten_method == 'row_mean_and_slope':
+        img = flatten_by_row_mean_and_slope(img)
+
+    # Remove any remaining constant offset
+    img = img - np.min(img)
     return img
 
 
