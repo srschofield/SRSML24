@@ -582,7 +582,7 @@ def visualize_reconstruction(model, test_image):
 
 
 def display_reconstructed_and_cluster_images(reconstructed_img, cluster_img, show_overlay=True, 
-                                             save_to_disk=False, output_path=None, image_name='img', dpi=150):
+                                             save_to_disk=False, output_path=None, predictions_time_stamp='', image_name='img', dpi=150):
     """
     Display side-by-side images: the reconstructed input image, the cluster labels,
     and optionally an overlay of the reconstructed image with cluster labels on top.
@@ -601,6 +601,15 @@ def display_reconstructed_and_cluster_images(reconstructed_img, cluster_img, sho
     Returns:
     - None: This function either displays the plot or saves it to disk based on save_to_disk.
     """
+
+    
+
+    # Output directory with timestamp
+    predictions_path = os.path.join(output_path, f'predictions/{predictions_time_stamp}')
+    if not os.path.exists(predictions_path):
+        os.makedirs(predictions_path)
+        print(f"Directory created: {predictions_path}")
+
     # Determine the number of subplots based on show_overlay
     n_plots = 3 if show_overlay else 2
     fig, ax = plt.subplots(1, n_plots, figsize=(6 * n_plots, 6))
@@ -627,7 +636,7 @@ def display_reconstructed_and_cluster_images(reconstructed_img, cluster_img, sho
     # Save to disk or display
     if save_to_disk:
         if output_path:
-            output_path = os.path.join(output_path, f"{image_name}.jpg")
+            output_path = os.path.join(predictions_path, f"{image_name}.jpg")
             plt.savefig(output_path, format='jpg', dpi=dpi)
             print(f"Image saved to {output_path} with dpi={dpi}")
         else:
@@ -1034,13 +1043,13 @@ def train_kmeans(data_pipeline, batch_size=2048, num_clusters=10, n_init=10, max
     """
     # Warm start by fitting KMeans on a small subset to initialize centroids
     subset = np.concatenate([batch.numpy() for batch in data_pipeline.take(10)])  # Example subset of 10 batches
-    initial_kmeans = KMeans(n_clusters=num_clusters, init='k-means++').fit(subset)
+    initial_kmeans = KMeans(n_clusters=num_clusters, n_init=n_init, init='k-means++').fit(subset)
     
-    # Initialize MiniBatchKMeans with precomputed centroids
+    # Initialize MiniBatchKMeans with precomputed centroids and specified n_init
     kmeans = MiniBatchKMeans(
         n_clusters=num_clusters,
         batch_size=batch_size,
-        n_init=1,
+        n_init=n_init,
         max_iter=max_iter,
         reassignment_ratio=reassignment_ratio,
         init=initial_kmeans.cluster_centers_
