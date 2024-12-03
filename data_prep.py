@@ -311,6 +311,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
             # NORMALISE ALL IMAGES to [0,1]
             try:
                 # Try dividing by the max value in the image array
+                img = img - np.min(img)
                 img = img / np.max(img)
             except ZeroDivisionError:
                 if verbose:
@@ -320,7 +321,6 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
             # Get the subfolder of the MTRX data
             mtrx_path_no_filename = os.path.dirname(mtrx_path)
 
-        
             mtrx_path_index = mtrx_path_no_filename.find('mtrx')
             relative_dir = mtrx_path_no_filename[mtrx_path_index + len('mtrx'):] if mtrx_path_index != -1 else ''
 
@@ -363,6 +363,12 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                     
                 # Create windows
                 img_windows, coordinates = extract_image_windows(img, px=window_size, pitch=window_pitch)
+
+                ## THIS WAS A TEST OF RENORMALISING THE WINDOWS. IT HAD TERRIBLE RESULTS.  
+                # # Normalize the image windows: (image - min) / (max - min)
+                # mins = np.min(img_windows, axis=(1, 2), keepdims=True)
+                # maxs = np.max(img_windows, axis=(1, 2), keepdims=True)            
+                # img_windows = (img_windows - mins) / (maxs - mins)
 
                 if return_windows:
                     all_windows.append(np.array(img_windows))  # Append windows as numpy array
