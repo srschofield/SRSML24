@@ -21,6 +21,7 @@ import os, sys
 # Third-party library imports
 import numpy as np  # Fundamental package for array computing with Python, useful for numerical operations on large, multi-dimensional arrays and matrices
 import spiepy  # Custom or third-party library for specific image processing functions, such as flattening images
+import gc # garbage collector for memory management
 
 from PIL import Image  # Python Imaging Library (PIL) is used for opening, manipulating, and saving many different image file formats
 
@@ -138,6 +139,14 @@ def elapsed_time(start, end):
 # Process MTRX
 # ============================================================================
 
+def cleanup(*vars):
+    for var in vars:
+        try:
+            del var
+        except NameError:
+            pass  # Ignore variables that were never created
+    gc.collect()
+
 
 def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
     flatten_method = kwargs.get('flatten_method', 'iterate_mask')
@@ -148,23 +157,23 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
     window_pitch = kwargs.get('window_pitch', 32)
     save_windows = kwargs.get('save_windows', True)
     save_jpg = kwargs.get('save_jpg', False)
-    save_raw = kwargs.get('save_raw', False)
+    # save_raw = kwargs.get('save_raw', False)
     verbose = kwargs.get('verbose', False)
     together = kwargs.get('together', False)
     collate = kwargs.get('collate', False)
     resample = kwargs.get('resample', True)
-    return_windows = kwargs.get('return_windows', False)
+    # return_windows = kwargs.get('return_windows', False)
     save_meta = kwargs.get('save_meta', True)
     cmap = kwargs.get('cmap','gray')
 
     save_windows = bool(save_windows) # convert to boolean
-    save_raw = bool(save_raw) # convert to boolean
+    # save_raw = bool(save_raw) # convert to boolean
     save_jpg = bool(save_jpg) # convert to boolean
     verbose = bool(verbose)  # convert to boolean
     together = bool(together)    # convert to boolean
     collate = bool(collate)    # convert to boolean
     resample = bool(resample)    # convert to boolean
-    return_windows = bool(return_windows) # convert to boolean
+    # return_windows = bool(return_windows) # convert to boolean
     save_meta = bool(save_meta)
 
     jpg_path = os.path.join(save_data_path,'jpg')
@@ -178,20 +187,20 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
     total_files = len(mtrx_paths)
     print(f'There are {total_files} files to process')
 
-    # Warn the user if return_windows is True and multiple MTRX files are being processed. 
-    if return_windows and total_files > 100:
-        response = input(f"Warning: You are about to process {total_files} MTRX files, which may consume a significant amount of memory. Do you want to proceed? (y/N): ").strip().lower()
-        if response.lower() not in ['y', 'yes']:
-            print("Processing stopped at the request of the user.")
-            return [""], [""]
+    # # Warn the user if return_windows is True and multiple MTRX files are being processed. 
+    # if return_windows and total_files > 100:
+    #     response = input(f"Warning: You are about to process {total_files} MTRX files, which may consume a significant amount of memory. Do you want to proceed? (y/N): ").strip().lower()
+    #     if response.lower() not in ['y', 'yes']:
+    #         print("Processing stopped at the request of the user.")
+    #         return [""], [""]
 
-    # If return_windows then we don't save anything to disk
-    if return_windows:
-        save_windows = False
-        save_jpg = False
-        save_raw = False
-        print('WARNING: return_windows is set to True, therefore we are not saving any files to disk.')
-        print('All windows generated from the mtrx files in the given folder will be returned as a list.\n')
+    # # If return_windows then we don't save anything to disk
+    # if return_windows:
+    #     save_windows = False
+    #     save_jpg = False
+    #     save_raw = False
+    #     print('WARNING: return_windows is set to True, therefore we are not saving any files to disk.')
+    #     print('All windows generated from the mtrx files in the given folder will be returned as a list.\n')
 
     # Dictionary for the scan directions
     scan_direction_map = {
@@ -201,8 +210,8 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
         "backward/down": 'BD'
     }
 
-    all_windows = []  # To store windows if return_windows is True
-    all_metadata = []
+    # all_windows = []  # To store windows if return_windows is True
+    # all_metadata = []
 
     for idx, mtrx_path in enumerate(mtrx_paths, start=1):
 
@@ -218,7 +227,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                 print('.', end='')
                 
         # LOAD MTRX FILE
-        imgAll, message_file = load_mtrx_data(mtrx_path)
+        imgAll, _ = load_mtrx_data(mtrx_path)
 
         if imgAll is None:
             continue
@@ -227,7 +236,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
 
         for scanDirection in imgAll:
             try:
-                MTRXimg, message_scan = mtrx.select_image(imgAll[scanDirection])
+                MTRXimg, _ = mtrx.select_image(imgAll[scanDirection])
                 scan_direction_full = imgAll[scanDirection]  # Get the full scan direction name
                 scan_direction = scan_direction_map[scan_direction_full]
             except Exception as e:
@@ -265,6 +274,8 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                 **selected_params  # Add the selected forward or backward parameters
             }
 
+            cleanup(MTRXimg)
+
             if verbose:
                 print(f"Width {metadata['width']} nm. Height {metadata['height']} nm. Angle {metadata['angle']} degrees.")
             
@@ -274,12 +285,14 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
             if py / px < pixel_ratio:
                 if verbose:
                     print(f"Skipping scan direction {scanDirection} for file {file_name_without_ext} due to low py/px ratio (ratio: {py/px:.2f}).\n")
+                cleanup(img)
                 continue
             
             # Skip the file if less that window_size x window_size in pixel size
             if px < window_size or py < window_size:
                 if verbose:
                     print("Skipping image of size ({}x{}) because it is smaller than the window size ({}x{}).".format(px, py, window_size, window_size))
+                cleanup(img)
                 continue
             
             # Here we rescale to a constant pixel density for ML training
@@ -324,19 +337,19 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
             mtrx_path_index = mtrx_path_no_filename.find('mtrx')
             relative_dir = mtrx_path_no_filename[mtrx_path_index + len('mtrx'):] if mtrx_path_index != -1 else ''
 
-            if save_raw:
-                # Create path for the RAW data save
-                raw_full_path = create_folder_path(raw_path, sub_dir=relative_dir, collate=collate)
+            # if save_raw:
+            #     # Create path for the RAW data save
+            #     raw_full_path = create_folder_path(raw_path, sub_dir=relative_dir, collate=collate)
     
-                # Save the whole image as numpy
-                raw_save_filename = file_name_without_ext + '_' + scan_direction + '.npy'
-                raw_save_path = os.path.join(raw_full_path, raw_save_filename)
-                save_raw_data(img, raw_save_path, verbose)
+            #     # Save the whole image as numpy
+            #     raw_save_filename = file_name_without_ext + '_' + scan_direction + '.npy'
+            #     raw_save_path = os.path.join(raw_full_path, raw_save_filename)
+            #     save_raw_data(img, raw_save_path, verbose)
                 
-                # Save the metadata as a text file
-                raw_txt_save_path = raw_save_path.replace('.npy', '.txt')
-                if save_meta:
-                    save_metadata(metadata, raw_txt_save_path)
+            #     # Save the metadata as a text file
+            #     raw_txt_save_path = raw_save_path.replace('.npy', '.txt')
+            #     if save_meta:
+            #         save_metadata(metadata, raw_txt_save_path)
 
             if save_jpg: 
                 # Create path for the JPG data save
@@ -356,7 +369,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                 if save_meta:
                     save_metadata(metadata, jpg_txt_save_path)
 
-            if save_windows or return_windows:
+            if save_windows: #or return_windows:
 
                 if img.shape[0] <= window_size or img.shape[1] <= window_size:
                     continue
@@ -370,9 +383,9 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                 # maxs = np.max(img_windows, axis=(1, 2), keepdims=True)            
                 # img_windows = (img_windows - mins) / (maxs - mins)
 
-                if return_windows:
-                    all_windows.append(np.array(img_windows))  # Append windows as numpy array
-                    all_metadata.append(metadata)
+                # if return_windows:
+                #     all_windows.append(np.array(img_windows))  # Append windows as numpy array
+                #     all_metadata.append(metadata)
 
                 if save_windows:
                     windows_base_save_file_name = file_name_without_ext + '_' + scan_direction
@@ -403,13 +416,16 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                     if save_meta:
                         save_metadata(metadata, save_path + '.txt')
 
+                    # Clear variables to avoid memory problems
+                    cleanup(img, img_windows)
+
     print()
     print("********************")
     print("Conversion complete.")
     print("********************\n")
 
-    if return_windows:
-        return all_windows, all_metadata  # Return list of NumPy arrays and metadata
+    # if return_windows:
+    #     return all_windows, all_metadata  # Return list of NumPy arrays and metadata
 
 # ============================================================================
 # File IO
@@ -749,22 +765,22 @@ def extract_regulation_parameters_from_mtrx_data(mtrx_data):
         return {}
 
 
-def save_raw_data(img, save_path, verbose=False):
-    """
-    Save the image data as a raw binary file (NumPy format).
+# def save_raw_data(img, save_path, verbose=False):
+#     """
+#     Save the image data as a raw binary file (NumPy format).
 
-    Parameters:
-        img (np.array): 2D numpy array of image data.
-        save_path (str): Full path where the raw data will be saved.
-        verbose (bool): If True, print out additional information.
-    """
-    if img.dtype != np.float32:
-        img = img.astype(np.float32)  # Convert to float32 if not already
+#     Parameters:
+#         img (np.array): 2D numpy array of image data.
+#         save_path (str): Full path where the raw data will be saved.
+#         verbose (bool): If True, print out additional information.
+#     """
+#     if img.dtype != np.float32:
+#         img = img.astype(np.float32)  # Convert to float32 if not already
 
-    np.save(save_path, img)  # Save the NumPy array as a binary .npy file
+#     np.save(save_path, img)  # Save the NumPy array as a binary .npy file
 
-    if verbose:
-        print('SAVED: {}'.format(os.path.basename(save_path)))
+#     if verbose:
+#         print('SAVED: {}'.format(os.path.basename(save_path)))
 
 
 def save_as_jpg(img, save_path, cmap='gray', verbose=False):
