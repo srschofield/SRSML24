@@ -1,15 +1,15 @@
 #!/bin/bash -f
 
-#$ -N mtrx_process                         # Job name
-#$ -l h_rt=72:00:00              # Set wall-clock time limit 
-#$ -l vf=32G                     # Memory limit per slot
-#$ -pe ompi-local 1              # Request 16 CPU slots for parallel environment 'ompi-local'
-# #$ -M s.schofield@ucl.ac.uk      # Email address for job notifications
-# #$ -m bea                        # Email notifications on (b)egin, (e)nd, and (a)bort
-#$ -V                            # Export all environment variables to the job
+#$ -N mtrx_process               # Job name
+#$ -o mtrx_process.log           # Output log file name
+#$ -l h_rt=96:00:00              # Set wall-clock time limit 
+#$ -l vf=64G                     # Memory limit per slot
+# #$ -pe ompi-local 40           # Request NUM CPU slots for parallel environment 'ompi-local'
+# #$ -M s.schofield@ucl.ac.uk    # Email address for job notifications
+# #$ -m bea                      # Email notifications on (b)egin, (e)nd, and (a)bort
+# #$ -V                            # Export all environment variables to the job
 #$ -cwd                          # Use the current working directory
 #$ -j y                          # Join standard error and output logs
-#$ -o mtrx_process.log              # Output log file name
 #$ -S /bin/bash                  # Use bash shell for the job script
 #$ -l lcn_gpu=1                  # Request 1 GPU
 
@@ -34,13 +34,7 @@ echo "Queue: $QUEUE"
 echo "Job ID: $JOB_ID"
 echo "Node: $(hostname)"
 echo "Number of CPU slots (NSLOTS): ${NSLOTS:-1}"  # Defaults to 1 if not set
-echo "Memory requested per slot: 32G"
-
-# Background process to wait for 60 seconds and then execute grep
-(
-  sleep 60
-  grep http jn_output.log > jn_server.log
-) &
+echo "Memory requested per slot: 64G"
 
 # Start Jupyter notebook
 echo "Starting Python Script..."

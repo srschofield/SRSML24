@@ -157,12 +157,10 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
     window_pitch = kwargs.get('window_pitch', 32)
     save_windows = kwargs.get('save_windows', True)
     save_jpg = kwargs.get('save_jpg', False)
-    # save_raw = kwargs.get('save_raw', False)
     verbose = kwargs.get('verbose', False)
     together = kwargs.get('together', False)
     collate = kwargs.get('collate', False)
     resample = kwargs.get('resample', True)
-    # return_windows = kwargs.get('return_windows', False)
     save_meta = kwargs.get('save_meta', True)
     cmap = kwargs.get('cmap','gray')
 
@@ -173,11 +171,9 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
     together = bool(together)    # convert to boolean
     collate = bool(collate)    # convert to boolean
     resample = bool(resample)    # convert to boolean
-    # return_windows = bool(return_windows) # convert to boolean
     save_meta = bool(save_meta)
 
     jpg_path = os.path.join(save_data_path,'jpg')
-    raw_path = os.path.join(save_data_path,'raw')
     windows_path = os.path.join(save_data_path,'windows')
 
     # If only a single filename is given, convert this to list
@@ -186,21 +182,6 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
 
     total_files = len(mtrx_paths)
     print(f'There are {total_files} files to process')
-
-    # # Warn the user if return_windows is True and multiple MTRX files are being processed. 
-    # if return_windows and total_files > 100:
-    #     response = input(f"Warning: You are about to process {total_files} MTRX files, which may consume a significant amount of memory. Do you want to proceed? (y/N): ").strip().lower()
-    #     if response.lower() not in ['y', 'yes']:
-    #         print("Processing stopped at the request of the user.")
-    #         return [""], [""]
-
-    # # If return_windows then we don't save anything to disk
-    # if return_windows:
-    #     save_windows = False
-    #     save_jpg = False
-    #     save_raw = False
-    #     print('WARNING: return_windows is set to True, therefore we are not saving any files to disk.')
-    #     print('All windows generated from the mtrx files in the given folder will be returned as a list.\n')
 
     # Dictionary for the scan directions
     scan_direction_map = {
@@ -325,8 +306,6 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                 if verbose:
                     print('Image min: {}, image max: {}.'.format(np.min(img), np.max(img)))
 
-
-
             # NORMALISE ALL IMAGES to [0,1]
             try:
                 # Try dividing by the max value in the image array
@@ -341,20 +320,6 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
 
             mtrx_path_index = mtrx_path_no_filename.find('mtrx')
             relative_dir = mtrx_path_no_filename[mtrx_path_index + len('mtrx'):] if mtrx_path_index != -1 else ''
-
-            # if save_raw:
-            #     # Create path for the RAW data save
-            #     raw_full_path = create_folder_path(raw_path, sub_dir=relative_dir, collate=collate)
-    
-            #     # Save the whole image as numpy
-            #     raw_save_filename = file_name_without_ext + '_' + scan_direction + '.npy'
-            #     raw_save_path = os.path.join(raw_full_path, raw_save_filename)
-            #     save_raw_data(img, raw_save_path, verbose)
-                
-            #     # Save the metadata as a text file
-            #     raw_txt_save_path = raw_save_path.replace('.npy', '.txt')
-            #     if save_meta:
-            #         save_metadata(metadata, raw_txt_save_path)
 
             if save_jpg: 
                 # Create path for the JPG data save
@@ -423,9 +388,6 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
     print("********************")
     print("Conversion complete.")
     print("********************\n")
-
-    # if return_windows:
-    #     return all_windows, all_metadata  # Return list of NumPy arrays and metadata
 
 # ============================================================================
 # File IO
@@ -875,7 +837,9 @@ def extract_image_windows(image, px=128, pitch=128):
             window_number += 1
 
             if window.shape[0] != 32 or window.shape[1] != 32:
-                print('WARNING: {} x {}'.format(window.shape[0],window.shape[1]))
+                print('\nWARNING: window number {}'.format(window_number))
+                print('WARNING: Height {} Width {}'.format(height, width))
+                print('WARNING: shape 0 {} x shape 1 {}. x {} y {}'.format(window.shape[0],window.shape[1],x, y))
 
     return np.array(windows), np.array(coordinates)
 
