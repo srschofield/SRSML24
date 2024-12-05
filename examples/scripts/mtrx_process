@@ -1,0 +1,74 @@
+-catch_rsh /opt/sge/default/spool/m042/active_jobs/37423.1/pe_hostfile
+m042
+Thu  5 Dec 11:02:20 GMT 2024
+
+Drink and dance and laugh and lie
+Love, the reeling midnight through
+For tomorrow we shall die!
+(But, alas, we never do.)
+		-- Dorothy Parker, "The Flaw in Paganism"
+
+LIST OF THE MODULES THAT ARE CURRENTLY LOADED:
+Currently Loaded Modulefiles:
+ 1) modules        3) apps/nvhpc/24.9/cu11.8/nvhpc  
+ 2) sge/2024.1.0   4) libs/cudnn/9.5.1.17/cuda-11   
+--
+CURRENTLY ACTIVE CONDA ENVIRONMENT
+# conda environments:
+#
+base                     /hpc/srs/local/miniconda3
+base-srs                 /hpc/srs/local/miniconda3/envs/base-srs
+tf                    *  /hpc/srs/local/miniconda3/envs/tf
+tfa30                    /hpc/srs/local/miniconda3/envs/tfa30
+
+--
+Python path: /hpc/srs/local/miniconda3/envs/tf/bin/python
+Working Directory: /hpc/srs/Python/modules/SRSML24/examples/scripts
+Queue: I_40T_64G_NVIDIA_TeslaT4_16G.q
+Job ID: 37423
+Node: m042
+Number of CPU slots (NSLOTS): 1
+Memory requested per slot: 32G
+Starting Python Script...
+module_path = /hpc/srs/Python/modules
+data_path = /hpc/srs/Python-data
+
+Python version: 3.9.15 | packaged by conda-forge | (main, Nov 22 2022, 08:45:29) 
+[GCC 10.4.0]
+TensorFlow version: 2.4.1
+TensorFlow is built with CUDA: True
+TensorFlow is built with ROCm: False
+
+System: Linux 4.18.0-513.24.1.el8_9.x86_64 (x86_64)
+Platform: Linux-4.18.0-513.24.1.el8_9.x86_64-x86_64-with-glibc2.28
+Processor: x86_64
+
+Number of GPUs available to TensorFlow: 1
+GPU Device: PhysicalDevice(name='/physical_device:GPU:0', device_type='GPU')
+
+>>> Running with GPU available <<<  (Linux-4.18.0-513.24.1.el8_9.x86_64-x86_64-with-glibc2.28)
+
+Current time 2024-12-05 11:03:00
+Deleted: /hpc/srs/Python-data/all_data_2023_script/jpg
+Deleted: /hpc/srs/Python-data/all_data_2023_script/windows
+All specified folders have been successfully deleted.
+Found 62592 files with extension 'Z_mtrx' in directory:
+/hpc/srs/Python-data/mtrx/train
+There are 62592 files to process
+.....jtjt....jtjt.....jtjt.....................jtjtjtjt..jtjt.............jtjt.jtjt.jtjt........jtjt........jtjt......jtjtjtjt.jtjtjtjt.jtjtjtjt..jtjt.............jtjtjtjt.jtjt...jtjt.jtjt.jtjt.jtjtjtjt. 100
+.jtjt.........jtjt.......jtjt.jtjt.jtjtjtjt...jtjt...jtjt.jtjt..jtjt.jtjt.jtjt..........jtjtjtjt...jtjt.....jtjtjtjt.jtjt..jtjt..jtjt.jtjtjtjt...jtjtjtjt.jtjt....jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt..jt.jt.jt..jtjtjtjt.jtjtjtjt.jtjt..jtjt.jtjt...jtjt.jtjt.jtjtjtjt 200
+jtjtjtjt.jtjt...jtjtjtjt...jtjtjtjt.jtjtjtjt.jtjt.jtjt....jtjtjtjt.jtjt..jtjt.jtjt.jtjt.jtjt..jtjt..jtjt..jtjt.jtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt..jtjt..jtjt.jtjt..jtjt.jtjt..jtjt...jtjt..jtjtjt.jt...jt........jtjtjtjt..jtjt.....jtjt.jtjt.jtjt............jtjt.jtjtjtjt.jtjt.........jtjt....jtjt... 300
+.jtjt.....jt..............jtjt................jtjtjtjt.jtjt...................jtjtjtjt.........jtjt.......jtjtjtjt.jtjtjtjt.jtjt..jtjtjtjt.jtjtjtjt.jtjt....jtjt.....jtjt...jtjtjtjt..jtjt.....jtjt..jtjt 400
+.........jtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt....jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.........jtjt.........jtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.....jtjt.jtjt.jtjt.jtjt..jtjt.jtjt........jtjt.jtjt.jtjtjtjt.jtjtjtjt.jtjt..jtjt............. 500
+..jtjtjtjt..jtjtjtjt..jtjtjtjt..jtjt...................jtjt.....jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt..jtjt.jtjt.....jtjt..jtjt..jtjtjtjt...jtjtjtjt.jtjtjtjt.jtjtjtjt..jtjtjtjt..jtjtjtjt....jtjtjtjt..jtjtjtjt..jtjt..jtjt..jtjt...jtjt...jtjt..jtjt..jtjt...jtjt...jtjt..jtjt..jtjt..jtjt... 600
+.jtjt.jtjt...jtjt...jtjt..jtjt.jtjt..jtjt...jtjt..jtjt..jtjt..jtjt..jtjt..jtjt...jtjt...jtjt.....jtjtjtjt.jtjtjtjt..jtjt..jtjtjtjt...jtjtjtjt.......................jtjtjtjt...jtjt..jtjt.......................... 700
+......jtjt.jtjtjtjt..jtjt...jtjtjtjt.jtjtjtjt.jtjt.jtjtjtjt.jtjtjtjt..........jt......jtjt.jtjt......jtjt...jtjt...jtjt..jtjt.jtjt..jt.....jtjt.jt....jtjt.jtjtjtjt...jtjt..jtjt..jtjt.jtjt.jtjt.jtjt....jtjt.jtjt...jtjt..jtjt.jtjt..jtjt...jtjt...jtjt.........jtjtjtjt 800
+......jtjt.jtjt..jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjt...jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjt.jtjt..jtjtjtjt....jtjtjtjt...jtjtjtjt.jtjt......jtjtjtjt...jtjt...jtjt....jtjt...jtjt...jtjtjtjt..jtjt.jtjt...jtjt..jtjt...jtjt....jtjtjtjt...jtjtjtjt......jtjt....jtjt...jtjt...jtjt..jtjt...jtjt...jtjt.jtjtjtjt.jtjt.jtjtjtjt..jtjt. 900
+jtjt.jtjt.jtjt...jtjtjtjt..jtjt.....jtjt...jtjt..jtjt....jtjt.jtjt.jtjt.jtjt..jtjt..jtjt..jtjtjtjt..jtjt..jtjt..jtjtjtjt.jtjt...jtjtjtjt...jtjt...jtjt..jtjtjtjt.jtjtjtjt..jtjt.jtjt.jtjt...jtjt..jtjt..jtjt....jtjt.....jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt...jtjt.jtjtjtjt.jtjtjtjt..jtjt...jtjt..jtjt..jtjt..jtjt..jtjt...jtjt..jtjt. 1000
+jtjt..jtjtjtjt....jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt...jtjtjtjt....jtjt..jtjt.jtjt...jtjt..jtjt..jtjt...jtjt..jtjt..jtjt..jtjt..jtjt...jtjtjtjt....jtjtjtjt.jtjtjtjt...jtjtjtjt..jtjt..jtjt...jtjt.jtjt.jtjt...jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt..jtjt.jtjt...jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt...jtjtjtjt.jtjt..jtjt..jtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt..jtjtjtjt.jtjt..jtjtjtjt..jtjt.jtjt..jtjtjtjt. 1100
+.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjt..jtjtjtjt...jtjt...jtjt....jtjt..jtjt..jtjt...jtjt...jtjtjtjt.jtjtjtjt...jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt..jtjt..jtjt.jtjt..jtjtjtjt..jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjt..jtjtjtjt.jtjtjtjt.jtjtjtjt...............jtjt.jtjt..jtjt..jtjt.jtjt..jtjtjtjt.jtjtjtjt...jtjt..jtjtjtjt.....jtjtjtjt...jtjt..jtjt...jtjt.......jtjt.jtjtjtjt 1200
+jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjt.......jtjt.jtjtjtjt..........jtjt..............jtjtjtjt...........jtjt.jtjt....jtjt.....jtjt.jtjt.jtjtjtjt....jtjt.jtjt..jtjt..jtjt..jtjt.jtjt..jtjt.jtjtjtjt...jtjtjtjt..jtjtjtjt.jtjtjtjt..jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjt...jtjtjtjt.jtjt...jtjt..jtjt...jtjt.jtjt.jtjt 1300
+jtjt.jtjtjtjt.jtjt.jtjt..jtjt..jtjt...jtjt......jtjt......jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt..jtjt...jtjt..jtjt...jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt..jtjt..jtjt..jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt....jtjt...jtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjt.....jtjt.jtjtjtjt...jtjtjtjt...jtjtjtjt 1400
+jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjt.......jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt..jtjtjtjt.jtjtjtjt.jtjt..jtjtjtjt.jtjt..jtjt..jtjt...jtjtjtjt.jtjt.jtjtjtjt.jtjt.jtjtjtjt.jtjt....jtjt.jtjt...jtjt...........jtjt.................jtjt.jtjt...........jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt..jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt 1500
+jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt..jtjt..jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjt..jtjtjtjt.jtjtjtjt.jtjtjtjt..jtjt...jtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt..jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjt..jtjtjtjt...jtjt..jtjt..jtjt....jtjt.jtjt........jtjt..jtjt...jtjt.jtjtjtjt..jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjtjtjt.jtjt..jtjtjtjt.....jtjtjtjt.jtjt.jtjt....jtjt..jtjt.jtjtjtjt...jtjt 1600
+.jtjt..jtjt...jtjt.jtjt.jtjt...jtjtjtjt....jtjt.jtjt....jtjtjtjt
