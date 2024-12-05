@@ -309,7 +309,10 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                     if verbose:
                         print(f"Skipping scan direction {scanDirection} for file {file_name_without_ext} due to zero width in metadata (division by zero error).")
                     continue  # Skip this image and go to the next
-         
+ 
+            # Process image
+            img = flatten_image_data(img, flatten_method)
+
             # Subtract image minimum and then scale.
             img = (img - np.min(img)) * data_scaling
 
@@ -322,9 +325,8 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                 if verbose:
                     print('Image min: {}, image max: {}.'.format(np.min(img), np.max(img)))
 
-            # Process image
-            img = flatten_image_data(img, flatten_method)
-            
+
+
             # NORMALISE ALL IMAGES to [0,1]
             try:
                 # Try dividing by the max value in the image array
