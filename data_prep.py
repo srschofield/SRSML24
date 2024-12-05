@@ -246,6 +246,10 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
             # Get the image data
             img = MTRXimg.data
 
+            # Skip if the image is smaller than the size of a single window in any dimension
+            if img.shape[0] <= window_size or img.shape[1] <= window_size:
+                continue
+
             # Extract additional parameters
             additional_params = extract_regulation_parameters_from_mtrx_data(mtrx)
 
@@ -305,10 +309,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                     if verbose:
                         print(f"Skipping scan direction {scanDirection} for file {file_name_without_ext} due to zero width in metadata (division by zero error).")
                     continue  # Skip this image and go to the next
-
-            # Process image
-            img = flatten_image_data(img, flatten_method)
-            
+         
             # Subtract image minimum and then scale.
             img = (img - np.min(img)) * data_scaling
 
@@ -321,10 +322,12 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                 if verbose:
                     print('Image min: {}, image max: {}.'.format(np.min(img), np.max(img)))
 
+            # Process image
+            img = flatten_image_data(img, flatten_method)
+            
             # NORMALISE ALL IMAGES to [0,1]
             try:
                 # Try dividing by the max value in the image array
-                img = img - np.min(img)
                 img = img / np.max(img)
             except ZeroDivisionError:
                 if verbose:
@@ -360,7 +363,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                 jpg_save_path = os.path.join(jpg_full_path, jpg_save_filename)
                 sys.stdout.write("\b")  # Moves back one character
                 sys.stdout.flush()
-                sys.stdout.write("j")  # Replace with a period
+                sys.stdout.write("j")  # Replace 
                 sys.stdout.flush()
                 save_as_jpg(img, jpg_save_path, cmap=cmap, verbose=verbose)
                 
@@ -370,10 +373,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                     save_metadata(metadata, jpg_txt_save_path)
 
             if save_windows: #or return_windows:
-
-                if img.shape[0] <= window_size or img.shape[1] <= window_size:
-                    continue
-                    
+                   
                 # Create windows
                 img_windows, coordinates = extract_image_windows(img, px=window_size, pitch=window_pitch)
 
@@ -397,17 +397,15 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
 
                     # # Save windows
                     if together: 
-                        #print('t',end='')
                         sys.stdout.write("\b")  # Moves back one character
                         sys.stdout.flush()
                         sys.stdout.write("t")  # Replace with a period
                         sys.stdout.flush()
                         save_image_windows_together(img_windows, coordinates, windows_full_path, base_filename=windows_base_save_file_name, verbose=verbose)
                     else:
-                        #print('i',end='')
                         sys.stdout.write("\b")  # Moves back one character
                         sys.stdout.flush()
-                        sys.stdout.write("i")  # Replace with a period
+                        sys.stdout.write("i")  # Replace 
                         sys.stdout.flush()
                         save_image_windows_individually(img_windows, coordinates, windows_full_path, base_filename=windows_base_save_file_name, verbose=verbose)
 
