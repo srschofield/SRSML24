@@ -105,7 +105,7 @@ dp.delete_data_folders(job_data_path, override=True)
 mtrx_train_file_list, _ = dp.list_files_by_extension(mtrx_train_path,'Z_mtrx',verbose=False)
 
 dp.process_mtrx_files(
-    mtrx_train_file_list[0:mtrx_train_data_limit],
+    mtrx_train_file_list[6700:mtrx_train_data_limit],
     job_data_path, # save data path
     flatten_method = flatten_method, pixel_density = pixel_density, pixel_ratio = pixel_ratio,
     data_scaling = data_scaling, window_size = window_size, window_pitch = window_pitch,

@@ -191,16 +191,13 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
         "backward/down": 'BD'
     }
 
-    # all_windows = []  # To store windows if return_windows is True
-    # all_metadata = []
-
     for idx, mtrx_path in enumerate(mtrx_paths, start=1):
 
         if verbose:
             print('___________________________________________')
             print(f'Processing file {idx} of {total_files}')
 
-        # Output to screen to indicate progress
+        # # Output to screen to indicate progress
         if not verbose:
             if idx % 100 == 0:
                 print(' {}'.format(idx),end='\n')
@@ -260,23 +257,26 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
             }
 
             cleanup(MTRXimg)
+          
+            py, px = img.shape
 
             if verbose:
-                print(f"Width {metadata['width']} nm. Height {metadata['height']} nm. Angle {metadata['angle']} degrees.")
-            
-            py, px = img.shape              
+                #print(f"Width {metadata['width']} nm. Height {metadata['height']} nm. Angle {metadata['angle']} degrees.  Original px {px}, py {py}.")            
+                print(f"[{idx}] [{scan_direction_full}] Image Metadata: Scan direction = {scan_direction_full}. Width = {metadata['width']} nm, Height = {metadata['height']} nm, Angle = {metadata['angle']}°, Original Dimensions = ({px}x{py}).")
+
+            # Skip the file if the original pixel numbers are fewer than the window size in either dimension
+            if px < window_size or py < window_size:
+                if verbose:
+                    print(f"[{idx}] [{scan_direction_full}] Skipping image with size ({px}x{py}) as it is smaller than the window size ({window_size}x{window_size}).")
+                    #print("{} Skipping image of size ({}x{}) because it is smaller than the window size ({}x{}).".format(idx, px, py, window_size, window_size))
+                cleanup(img)
+                continue
 
             # Skip file if does not meet the aspect ratio requirement
             if py / px < pixel_ratio:
                 if verbose:
-                    print(f"Skipping scan direction {scanDirection} for file {file_name_without_ext} due to low py/px ratio (ratio: {py/px:.2f}).\n")
-                cleanup(img)
-                continue
-            
-            # Skip the file if less that window_size x window_size in pixel size
-            if px < window_size or py < window_size:
-                if verbose:
-                    print("Skipping image of size ({}x{}) because it is smaller than the window size ({}x{}).".format(px, py, window_size, window_size))
+                    print(f"[{idx}] [{scan_direction_full}] Skipping scan direction '{scan_direction_full}' for file '{file_name_without_ext}' due to low aspect ratio (py/px = {py/px:.2f}).")
+                    #print(f"Skipping scan direction {scanDirection} for file {file_name_without_ext} due to low py/px ratio (ratio: {py/px:.2f}).\n")
                 cleanup(img)
                 continue
             
@@ -288,9 +288,21 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                     img = resample_image_data(img, metadata['width'], pixel_density, pixel_density_orig, verbose)
                 except ZeroDivisionError:
                     if verbose:
-                        print(f"Skipping scan direction {scanDirection} for file {file_name_without_ext} due to zero width in metadata (division by zero error).")
+                        print(f"[{idx}] [{scan_direction_full}] Skipping scan direction '{scanDirection}' for file '{file_name_without_ext}' due to zero width in metadata (division by zero error).")
+                        #print(f"Skipping scan direction {scanDirection} for file {file_name_without_ext} due to zero width in metadata (division by zero error).")
                     continue  # Skip this image and go to the next
- 
+            
+            # Get the dimensions of the resized image
+            py, px = img.shape
+
+            # Skip the file if the rescaled image has pixel numbers are fewer than the window size in either dimension
+            if px < window_size or py < window_size:
+                if verbose:
+                    print(f"[{idx}] [{scan_direction_full}] Skipping rescaled image with size ({px}x{py}) as it is smaller than the window size ({window_size}x{window_size}).")
+                    #print("{} Skipping image of size ({}x{}) because it is smaller than the window size ({}x{}).".format(idx, px, py, window_size, window_size))
+                cleanup(img)
+                continue    
+
             # Process image
             img = flatten_image_data(img, flatten_method)
 
@@ -300,11 +312,14 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
             # Skip images with data outside the range [0,1]
             if np.max(img) > 1.0:
                 if verbose:
-                    print(f"Skipping scan direction {scanDirection} for file {file_name_without_ext} due to data outside range [0,1]: max= {np.max(img):.2f}).\n")
+                    print(f"[{idx}] [{scan_direction_full}] Skipping scan direction '{scan_direction_full}' for file '{file_name_without_ext}' due to data outside the range [0,1] (max = {np.max(img):.2f}).")
+                    #print(f"Skipping scan direction {scanDirection} for file {file_name_without_ext} due to data outside range [0,1]: max= {np.max(img):.2f}).\n")
                 continue
             else:
                 if verbose:
-                    print('Image min: {}, image max: {}.'.format(np.min(img), np.max(img)))
+                    #print('Original Image data range min: {}, image max: {}.'.format(np.min(img), np.max(img)))
+                    print(f"[{idx}] [{scan_direction_full}] Original Image Data Range: Min = {np.min(img):.2f}, Max = {np.max(img):.2f}.")
+
 
             # NORMALISE ALL IMAGES to [0,1]
             try:
@@ -312,8 +327,13 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                 img = img / np.max(img)
             except ZeroDivisionError:
                 if verbose:
-                    print(f"Skipping scan direction {scanDirection} for file {file_name_without_ext} due to zero max value (division by zero error).")
+                    print(f"[{idx}] [{scan_direction_full}] Skipping scan direction '{scanDirection}' for file '{file_name_without_ext}' due to zero max value (division by zero error).")
+                    #print(f"Skipping scan direction {scanDirection} for file {file_name_without_ext} due to zero max value (division by zero error).")
                 continue  # Skip this image and go to the next
+            
+            if verbose:
+                    #print('Original Image data range min: {}, image max: {}.'.format(np.min(img), np.max(img)))
+                    print(f"[{idx}] [{scan_direction_full}] Image Data Range Scaled: Min = {np.min(img):.2f}, Max = {np.max(img):.2f}.")
 
             # Get the subfolder of the MTRX data
             mtrx_path_no_filename = os.path.dirname(mtrx_path)
@@ -328,10 +348,11 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                 # Save the whole image as JPG
                 jpg_save_filename = file_name_without_ext + '_' + scan_direction + '.jpg'
                 jpg_save_path = os.path.join(jpg_full_path, jpg_save_filename)
-                sys.stdout.write("\b")  # Moves back one character
-                sys.stdout.flush()
-                sys.stdout.write("j")  # Replace 
-                sys.stdout.flush()
+                if not verbose:
+                    sys.stdout.write("\b")  # Moves back one character
+                    sys.stdout.flush()
+                    sys.stdout.write("j")  # Replace 
+                    sys.stdout.flush()
                 save_as_jpg(img, jpg_save_path, cmap=cmap, verbose=verbose)
                 
                 # Save the metadata as a text file
@@ -364,16 +385,18 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
 
                     # # Save windows
                     if together: 
-                        sys.stdout.write("\b")  # Moves back one character
-                        sys.stdout.flush()
-                        sys.stdout.write("t")  # Replace with a period
-                        sys.stdout.flush()
+                        if not verbose:
+                            sys.stdout.write("\b")  # Moves back one character
+                            sys.stdout.flush()
+                            sys.stdout.write("t")  # Replace with a period
+                            sys.stdout.flush()
                         save_image_windows_together(img_windows, coordinates, windows_full_path, base_filename=windows_base_save_file_name, verbose=verbose)
                     else:
-                        sys.stdout.write("\b")  # Moves back one character
-                        sys.stdout.flush()
-                        sys.stdout.write("i")  # Replace 
-                        sys.stdout.flush()
+                        if not verbose:
+                            sys.stdout.write("\b")  # Moves back one character
+                            sys.stdout.flush()
+                            sys.stdout.write("i")  # Replace 
+                            sys.stdout.flush()
                         save_image_windows_individually(img_windows, coordinates, windows_full_path, base_filename=windows_base_save_file_name, verbose=verbose)
 
                     # Save the metadata as a text file 
@@ -536,7 +559,7 @@ def delete_data_folders(data_path, subdirectories=None, override=False):
             return
 
     if not override:
-        # Warning message
+        # message
         print("The following folders and all their contents will be permanently deleted and cannot be undone:")
         for folder in existing_folders:
             print(f"- {folder}")
@@ -727,24 +750,6 @@ def extract_regulation_parameters_from_mtrx_data(mtrx_data):
         return {}
 
 
-# def save_raw_data(img, save_path, verbose=False):
-#     """
-#     Save the image data as a raw binary file (NumPy format).
-
-#     Parameters:
-#         img (np.array): 2D numpy array of image data.
-#         save_path (str): Full path where the raw data will be saved.
-#         verbose (bool): If True, print out additional information.
-#     """
-#     if img.dtype != np.float32:
-#         img = img.astype(np.float32)  # Convert to float32 if not already
-
-#     np.save(save_path, img)  # Save the NumPy array as a binary .npy file
-
-#     if verbose:
-#         print('SAVED: {}'.format(os.path.basename(save_path)))
-
-
 def save_as_jpg(img, save_path, cmap='gray', verbose=False):
     """
     Save the image data as a JPG file with an optional colormap.
@@ -769,10 +774,9 @@ def save_as_jpg(img, save_path, cmap='gray', verbose=False):
     image.save(save_path, format='JPEG')
 
     if verbose:
-        print('SAVED: {}'.format(os.path.basename(save_path)))
+        print('Saved full image as jpg: {}'.format(os.path.basename(save_path)))
 
         
-
 def save_metadata(metadata, save_path):
     """
     Save the image metadata (including width, height, angle, scan direction, bias, and current) to a text file.
@@ -809,6 +813,7 @@ def extract_image_windows(image, px=128, pitch=128):
 
     # Get image dimensions
     height, width = image.shape
+    #print('EXTRRACTING WINDOWS. ORIG IMAGE: Height {} Width {}'.format(height, width))
 
     # Calculate the number of windows in each dimension
     num_windows_y = max(1, (height - px) // pitch + 1)
@@ -837,51 +842,14 @@ def extract_image_windows(image, px=128, pitch=128):
             window_number += 1
 
             if window.shape[0] != 32 or window.shape[1] != 32:
-                print('\nWARNING: window number {}'.format(window_number))
-                print('WARNING: Height {} Width {}'.format(height, width))
-                print('WARNING: shape 0 {} x shape 1 {}. x {} y {}'.format(window.shape[0],window.shape[1],x, y))
+                print('\n\n*************\n window number {}: {} {}\n\n'.format(window_number, window.shape[0],window.shape[1]))
+                
+                plt.imshow(window)
+                plt.show()
 
     return np.array(windows), np.array(coordinates)
 
 
-# def save_image_windows_individually(img_windows, coordinates, save_dir, base_filename='window', verbose=False):
-#     """
-#     Save each image window from a 3D numpy array to separate raw binary files (NumPy format).
-#     Also save the coordinates of each window to a text file.
-
-#     Parameters:
-#         img_windows (np.array): 3D numpy array of image windows (shape: [num_windows, height, width]).
-#         coordinates (np.array): 2D numpy array of window coordinates (shape: [num_windows, 3]).
-#         save_dir (str): Directory where the raw data will be saved.
-#         base_filename (str): Base name for each window file.
-#         verbose (bool): If True, print out additional information.
-#     """
-#     os.makedirs(save_dir, exist_ok=True)
-
-#     num_windows = img_windows.shape[0]
-#     for i in range(num_windows):
-#         # Generate the filename with a number appended in the format 00000, 00001, etc.
-#         filename = f"{base_filename}_{i:05d}.npy"
-#         save_path = os.path.join(save_dir, filename)
-
-#         # Get the i-th window and save it as a .npy file
-#         window = img_windows[i]
-#         if window.dtype != np.float32:
-#             window = window.astype(np.float32)  # Convert to float32 if not already
-
-#         np.save(save_path, window)  # Save the window as a binary .npy file
-
-#     # Save the coordinates as a text file with formatted columns
-#     coordinates_filename = f"{base_filename}_coordinates.txt"
-#     coordinates_path = os.path.join(save_dir, coordinates_filename)
-#     fmt = '%05d          %-15s%-15s'
-#     header = f"{'Window_Number':<15}{'X_Position':<15}{'Y_Position':<15}"
-#     np.savetxt(coordinates_path, coordinates, fmt=fmt, header=header, comments='')
-#     if verbose:
-#         print('SAVED {} WINDOWS\n'.format(num_windows))
-#         print('SAVED COORDINATES TO {}\n'.format(coordinates_path))
-
-# this function replaces the one above, it is slightly faster
 def save_image_windows_individually(img_windows, coordinates, save_dir, base_filename='window', verbose=False):
     """
     Save each image window from a 3D numpy array to separate raw binary files (NumPy format)
@@ -916,8 +884,8 @@ def save_image_windows_individually(img_windows, coordinates, save_dir, base_fil
     np.savetxt(coordinates_path, coordinates, fmt=fmt, header=header, comments='')
 
     if verbose:
-        print(f'SAVED {num_windows} WINDOWS\n')
-        print(f'SAVED COORDINATES TO {coordinates_path}\n')
+        print(f'Saved {num_windows} windows\n')
+        print(f'Saved coordinates to {coordinates_path}\n')
 
 
 
@@ -940,7 +908,8 @@ def save_image_windows_together(img_windows, coordinates, save_dir, base_filenam
     save_path = os.path.join(save_dir, f"{base_filename}_all_windows.npy")
     np.save(save_path, img_windows)
     if verbose:
-        print(f'SAVED ALL WINDOWS TO {save_path}')
+        num_windows = len(img_windows)
+        print(f'Saved {num_windows} windows to {save_path}')
 
     # Save the coordinates as a text file with formatted columns
     coordinates_filename = f"{base_filename}_coordinates.txt"
@@ -949,7 +918,7 @@ def save_image_windows_together(img_windows, coordinates, save_dir, base_filenam
     header = f"{'Window_Number':<15}{'X_Position':<15}{'Y_Position':<15}"
     np.savetxt(coordinates_path, coordinates, fmt=fmt, header=header, comments='')
     if verbose:
-        print(f'SAVED COORDINATES TO {coordinates_path}')
+        print(f'Saved coordinates to {coordinates_path}\n')
 
 
 
@@ -1136,7 +1105,8 @@ def resample_image_data(img, real_width, pixel_density, pixel_density_orig, verb
         img = cv2.resize(img, (px, py), interpolation=cv2.INTER_AREA)
 
         if verbose:
-            print(f'Image RESCALED: real = {real_width} nm, pixel width = {px}, pixel density = {px/real_width} px/nm.')
+            #print(f'Image RESCALED: real = {real_width} nm, pixel width = {px}, pixel density = {px/real_width} px/nm.')
+            print(f"    Image Rescaled: Real Width = {real_width:.2f} nm, Pixel Width = {px}, Pixel Density = {px/real_width:.2f} px/nm.")
 
     return img
 
@@ -1199,48 +1169,6 @@ def display_window_selection(windows, cols=3, total_width=15, title=None):
 
     plt.show()
 
-
-
-# def reconstruct_image(windows, windows_coordinates, window_size):
-#     """
-#     Reconstruct the original image from overlapping windows.
-
-#     Args:
-#         windows (numpy.ndarray): Array of windowed images of shape (N, px, py).
-#         windows_coordinates (numpy.ndarray): Array of coordinates for each window of shape (N, 2),
-#                                              where the columns represent [x, y].
-#         window_size (tuple): Size of each window (px, py).
-
-#     Returns:
-#         numpy.ndarray: Reconstructed image.
-#     """
-#     px, py = (window_size, window_size)
-
-#     # Determine the dimensions of the final reconstructed image
-#     max_x = max(windows_coordinates[:, 0]) + px
-#     max_y = max(windows_coordinates[:, 1]) + py
-
-#     # Create arrays to store the reconstructed image and a weight matrix for averaging overlaps
-#     reconstructed_image = np.zeros((max_y, max_x))
-#     weight_matrix = np.zeros((max_y, max_x))
-
-#     # Iterate over all windows and place them in their respective positions
-#     for i in range(len(windows)):
-#         # Extract x and y coordinates (ignoring window_number)
-#         x, y = windows_coordinates[i, 0], windows_coordinates[i, 1]
-#         window = windows[i]
-
-#         # Add the window to the appropriate location in the reconstructed image
-#         reconstructed_image[y:y + py, x:x + px] += window
-#         weight_matrix[y:y + py, x:x + px] += 1
-
-#     # Avoid division by zero by setting non-overlapping regions to 1
-#     weight_matrix[weight_matrix == 0] = 1
-
-#     # Average overlapping regions by dividing by the weight matrix
-#     reconstructed_image /= weight_matrix
-
-#     return reconstructed_image
 
 def reconstruct_image(windows, windows_coordinates, window_size):
     """
