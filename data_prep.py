@@ -163,6 +163,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
     resample = kwargs.get('resample', True)
     save_meta = kwargs.get('save_meta', True)
     cmap = kwargs.get('cmap','gray')
+    save_window_jpgs = kwargs.get('save_window_jpgs', False)
 
     save_windows = bool(save_windows) # convert to boolean
     # save_raw = bool(save_raw) # convert to boolean
@@ -172,6 +173,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
     collate = bool(collate)    # convert to boolean
     resample = bool(resample)    # convert to boolean
     save_meta = bool(save_meta)
+    save_window_jpgs = bool(save_window_jpgs)
 
     jpg_path = os.path.join(save_data_path,'jpg')
     windows_path = os.path.join(save_data_path,'windows')
@@ -399,6 +401,11 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                             sys.stdout.flush()
                         save_image_windows_individually(img_windows, coordinates, windows_full_path, base_filename=windows_base_save_file_name, verbose=verbose)
 
+                    if save_window_jpgs:
+                        # Create path for the WINDOWS data save
+                        windows_full_path_jpgs = create_folder_path(windows_path, sub_dir=windows_relative_save_path+'/jpg', collate=collate)
+                        save_image_windows_as_jpg(img_windows, coordinates, windows_full_path_jpgs, base_filename=windows_base_save_file_name, verbose=verbose)
+
                     # Save the metadata as a text file 
                     save_path = os.path.join(windows_full_path, windows_base_save_file_name)
                     if save_meta:
@@ -406,6 +413,8 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
 
                     # Clear variables to avoid memory problems
                     cleanup(img, img_windows)
+                
+                
 
     print()
     print("********************")
@@ -887,6 +896,43 @@ def save_image_windows_individually(img_windows, coordinates, save_dir, base_fil
         print(f'Saved {num_windows} windows\n')
         print(f'Saved coordinates to {coordinates_path}\n')
 
+
+def save_image_windows_as_jpg(img_windows, coordinates, save_dir, base_filename='window', verbose=False):
+    """
+    Save each image window from a 3D numpy array to separate JPG files
+    using parallel processing. Also save the coordinates of each window to a text file.
+
+    Parameters:
+        img_windows (np.array): 3D numpy array of image windows (shape: [num_windows, height, width]).
+        coordinates (np.array): 2D numpy array of window coordinates (shape: [num_windows, 3]).
+        save_dir (str): Directory where the JPG files will be saved.
+        base_filename (str): Base name for each window file.
+        verbose (bool): If True, print out additional information.
+    """
+    os.makedirs(save_dir, exist_ok=True)
+
+    # Helper function to save an individual window
+    def save_window(i):
+        filename = f"{base_filename}_{i:05d}.jpg"
+        save_path = os.path.join(save_dir, filename)
+        window = img_windows[i]
+        # Normalize the window to [0, 255] and convert to uint8
+        window = ((window - window.min()) / (window.max() - window.min()) * 255).astype(np.uint8)
+        # Save the window as a JPG image
+        Image.fromarray(window).save(save_path)
+
+    # Save all image windows in parallel
+    num_windows = img_windows.shape[0]
+    with ThreadPoolExecutor() as executor:
+        list(executor.map(save_window, range(num_windows)))
+
+    # Save coordinates to a text file
+    coordinates_path = os.path.join(save_dir, "coordinates.txt")
+    np.savetxt(coordinates_path, coordinates, fmt="%d")
+
+    if verbose:
+        print(f"Saved {num_windows} windows as JPG files\n")
+        print(f"Saved coordinates to {coordinates_path}\n")
 
 
 def save_image_windows_together(img_windows, coordinates, save_dir, base_filename='window', verbose=False):
