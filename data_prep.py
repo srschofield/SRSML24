@@ -198,6 +198,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
         if verbose:
             print('___________________________________________')
             print(f'Processing file {idx} of {total_files}')
+            print(f'File: {mtrx_path}')
 
         # # Output to screen to indicate progress
         if not verbose:
@@ -264,7 +265,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
 
             if verbose:
                 #print(f"Width {metadata['width']} nm. Height {metadata['height']} nm. Angle {metadata['angle']} degrees.  Original px {px}, py {py}.")            
-                print(f"[{idx}] [{scan_direction_full}] Image Metadata: Scan direction = {scan_direction_full}. Width = {metadata['width']} nm, Height = {metadata['height']} nm, Angle = {metadata['angle']}°, Original Dimensions = ({px}x{py}).")
+                print(f"[{idx}] [{scan_direction_full}] Image Metadata: ({px}x{py}). Width = {metadata['width']} nm, Height = {metadata['height']} nm, Angle = {metadata['angle']}°.")
 
             # Skip the file if the original pixel numbers are fewer than the window size in either dimension
             if px < window_size or py < window_size:
@@ -287,7 +288,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                 try:
                     # Calculate the original pixel density and rescale the image
                     pixel_density_orig = px / metadata['width']
-                    img = resample_image_data(img, metadata['width'], pixel_density, pixel_density_orig, verbose)
+                    img = resample_image_data(img, pixel_density, pixel_density_orig, pixel_limit=5000)
                 except ZeroDivisionError:
                     if verbose:
                         print(f"[{idx}] [{scan_direction_full}] Skipping scan direction '{scanDirection}' for file '{file_name_without_ext}' due to zero width in metadata (division by zero error).")
@@ -296,6 +297,9 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
             
             # Get the dimensions of the resized image
             py, px = img.shape
+
+            if verbose:
+                print(f"[{idx}] [{scan_direction_full}] Image rescaled: ({px}x{py})")
 
             # Skip the file if the rescaled image has pixel numbers are fewer than the window size in either dimension
             if px < window_size or py < window_size:
@@ -322,7 +326,6 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                     #print('Original Image data range min: {}, image max: {}.'.format(np.min(img), np.max(img)))
                     print(f"[{idx}] [{scan_direction_full}] Original Image Data Range: Min = {np.min(img):.2f}, Max = {np.max(img):.2f}.")
 
-
             # NORMALISE ALL IMAGES to [0,1]
             try:
                 # Try dividing by the max value in the image array
@@ -334,8 +337,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                 continue  # Skip this image and go to the next
             
             if verbose:
-                    #print('Original Image data range min: {}, image max: {}.'.format(np.min(img), np.max(img)))
-                    print(f"[{idx}] [{scan_direction_full}] Image Data Range Scaled: Min = {np.min(img):.2f}, Max = {np.max(img):.2f}.")
+                print(f"[{idx}] [{scan_direction_full}] Image Data Range Scaled: Min = {np.min(img):.2f}, Max = {np.max(img):.2f}.")
 
             # Get the subfolder of the MTRX data
             mtrx_path_no_filename = os.path.dirname(mtrx_path)
@@ -1130,7 +1132,7 @@ def flatten_image_data(img, flatten_method='iterate_mask'):
     return img
 
 
-def resample_image_data(img, real_width, pixel_density, pixel_density_orig, verbose=False):
+def resample_image_data(img, pixel_density, pixel_density_orig, pixel_limit=5000):
     """
     Resample image data to match the specified pixel density.
 
@@ -1145,14 +1147,16 @@ def resample_image_data(img, real_width, pixel_density, pixel_density_orig, verb
         np.array: Resampled image data.
     """
     px, py = img.shape[1], img.shape[0]
+
     if pixel_density_orig != pixel_density:
         px = round(px * pixel_density / pixel_density_orig)
         py = round(py * pixel_density / pixel_density_orig)
-        img = cv2.resize(img, (px, py), interpolation=cv2.INTER_AREA)
 
-        if verbose:
-            #print(f'Image RESCALED: real = {real_width} nm, pixel width = {px}, pixel density = {px/real_width} px/nm.')
-            print(f"    Image Rescaled: Real Width = {real_width:.2f} nm, Pixel Width = {px}, Pixel Density = {px/real_width:.2f} px/nm.")
+        if px > pixel_limit or py > pixel_limit:
+            print(f"*** The rescaled image would have dimension ({px,py}). This is greature than the specified pixel limit ({pixel_limit}x{pixel_limit}).\n*** Setting the image to empty to avoid memory problems.")
+            img = np.zeros((2,2),dtype=float)
+        else:
+            img = cv2.resize(img, (px, py), interpolation=cv2.INTER_AREA)
 
     return img
 
