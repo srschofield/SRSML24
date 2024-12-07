@@ -1153,7 +1153,7 @@ def resample_image_data(img, pixel_density, pixel_density_orig, pixel_limit=5000
         py = round(py * pixel_density / pixel_density_orig)
 
         if px > pixel_limit or py > pixel_limit:
-            print(f"*** The rescaled image would have dimension ({px,py}). This is greature than the specified pixel limit ({pixel_limit}x{pixel_limit}).\n*** Setting the image to empty to avoid memory problems.")
+            print(f"\n*** The rescaled image would have dimension {px,py}. This is greature than the specified pixel limit {pixel_limit,pixel_limit}. Skipping image")
             img = np.zeros((2,2),dtype=float)
         else:
             img = cv2.resize(img, (px, py), interpolation=cv2.INTER_AREA)
