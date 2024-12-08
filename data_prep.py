@@ -288,7 +288,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                 try:
                     # Calculate the original pixel density and rescale the image
                     pixel_density_orig = px / metadata['width']
-                    img = resample_image_data(img, pixel_density, pixel_density_orig, pixel_limit=5000)
+                    img = resample_image_data(img, pixel_density, pixel_density_orig, pixel_limit=20000, verbose=verbose)
                 except ZeroDivisionError:
                     if verbose:
                         print(f"[{idx}] [{scan_direction_full}] Skipping scan direction '{scanDirection}' for file '{file_name_without_ext}' due to zero width in metadata (division by zero error).")
@@ -1132,7 +1132,7 @@ def flatten_image_data(img, flatten_method='iterate_mask'):
     return img
 
 
-def resample_image_data(img, pixel_density, pixel_density_orig, pixel_limit=5000):
+def resample_image_data(img, pixel_density, pixel_density_orig, pixel_limit=5000, verbose=True):
     """
     Resample image data to match the specified pixel density.
 
@@ -1153,7 +1153,8 @@ def resample_image_data(img, pixel_density, pixel_density_orig, pixel_limit=5000
         py = round(py * pixel_density / pixel_density_orig)
 
         if px > pixel_limit or py > pixel_limit:
-            print(f"\n*** The rescaled image would have dimension {px,py}. This is greature than the specified pixel limit {pixel_limit,pixel_limit}. Skipping image")
+            if verbose: 
+                print(f"\n*** The rescaled image would have dimension {px,py}. This is greature than the specified pixel limit {pixel_limit,pixel_limit}. Skipping image")
             img = np.zeros((2,2),dtype=float)
         else:
             img = cv2.resize(img, (px, py), interpolation=cv2.INTER_AREA)
