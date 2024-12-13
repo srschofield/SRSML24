@@ -21,6 +21,7 @@ import os
 import subprocess 
 import matplotlib.pyplot as plt
 import numpy as np
+from datetime import datetime
 
 import tensorflow as tf
 from tensorflow.keras import layers
@@ -239,6 +240,7 @@ def create_tf_dataset_batched(file_paths, batch_size=16, buffer_size=1000, is_au
 # Model IO
 # ============================================================================
 
+
 def save_model(model, model_path, model_name='autoencoder'):
     """
     Saves the given model to the specified path, ensuring the directory exists.
@@ -252,12 +254,14 @@ def save_model(model, model_path, model_name='autoencoder'):
     if not os.path.exists(model_path):
         os.makedirs(model_path)
 
-    # Full model file path with .h5 extension
-    model_file_path = os.path.join(model_path, model_name + '.keras')
+    # Add date/time to the model name
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    model_file_path = os.path.join(model_path, f"{model_name}_{timestamp}.keras")
 
     # Save the model
     model.save(model_file_path)
     print(f"Model saved at: {model_file_path}")
+
 
 
 def load_model(model_path, model_name='autoencoder', compile_model=False):
@@ -282,7 +286,6 @@ def load_model(model_path, model_name='autoencoder', compile_model=False):
     return loaded_model
 
 
-
 def save_history(history, model_path, model_name='autoencoder', 
                  loss_name='loss', val_loss_name='val_loss', 
                  metrics=None, val_metrics=None):
@@ -302,8 +305,9 @@ def save_history(history, model_path, model_name='autoencoder',
     if not os.path.exists(model_path):
         os.makedirs(model_path)
 
-    # Full history file path with .txt extension
-    history_path = os.path.join(model_path, model_name + '_history.txt')
+    # Add date/time to the history file name
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    history_path = os.path.join(model_path, f"{model_name}_history_{timestamp}.txt")
 
     # Extract history data
     epochs = range(1, len(history.history[loss_name]) + 1)
@@ -340,6 +344,7 @@ def save_history(history, model_path, model_name='autoencoder',
             f.write(line + "\n")
 
     print(f"History saved to {history_path}")
+
 
 
 # ============================================================================
