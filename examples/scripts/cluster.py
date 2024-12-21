@@ -68,7 +68,7 @@ start_time = dp.current_datetime()
 
 
 # Parameters for windows creation
-job_name = 'all_data_2023'
+job_name = 'data_10000_1000'
 job_data_path = dp.create_new_data_path(data_path, job_name, include_date=False)
 mtrx_train_path = os.path.join(data_path, 'mtrx/train')
 mtrx_test_path = os.path.join(data_path, 'mtrx/test')
@@ -78,7 +78,7 @@ pixel_density = 15.0    # Convert all images to a constant pixel density
 pixel_ratio = 0.85       # If an image has less than this % in the slow scan direction it is discarded
 data_scaling = 1.e9     # Scale the z-height of the data
 window_size = 32        # Window size for training/validation
-window_pitch = 16       # Window pitch for training/validation
+window_pitch = 32       # Window pitch for training/validation
 together = True        # Set this True to save image windows for a mtrx image as a single file rather than separate files.
 collate = False         # Set this True to remove all subfolder directories and save all data in root data path
 
@@ -104,10 +104,10 @@ reassignment_ratio=0.05                         # Fraction of clusters reassigne
 predict_window_pitch = 4               # Window pitch for prediction
 
 # DATA LIMITS FOR TESTING THE CODE
-mtrx_train_data_limit = None #2000         # Number of MTRX files to process (training)
-mtrx_test_data_limit = None #500         # Number of MTRX files to process (validation)
+mtrx_train_data_limit = 10000         # Number of MTRX files to process (training)
+mtrx_test_data_limit = 1000         # Number of MTRX files to process (validation)
 
-train_data_limit = None #2000*batch_size
+train_data_limit = None 
 predict_data_limit = None
 
 # REMOVE ALL DATA FOLDERS EXCEPT MTRX 
@@ -147,8 +147,8 @@ dp.process_mtrx_files(
 windows_train_path = os.path.join(job_data_path, 'windows/train')
 train_files, num_train = dp.list_files_by_extension(windows_train_path, 'npy')
 train_files = train_files[:train_data_limit]
+
 # Create dataset with prefetching
-#train_dataset = m.create_tf_dataset(train_files, batch_size=batch_size, buffer_size=buffer_size, is_autoencoder=True, shuffle=True)
 train_dataset = m.create_tf_dataset_batched(
     train_files, 
     batch_size=batch_size, 
@@ -186,7 +186,7 @@ if is_mac_silicon:
         metrics=['mse', 'mae']
     )
 else:
-    print("Not running on Mac with Apple Silicon. Using new RMSprop optimizer.")
+    print("Using new RMSprop optimizer.")
     autoencoder_model.compile(
         optimizer=tf.keras.optimizers.RMSprop(learning_rate=learning_rate),
         loss='mean_squared_error',
