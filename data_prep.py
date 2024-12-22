@@ -177,6 +177,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
 
     jpg_path = os.path.join(save_data_path,'jpg')
     windows_path = os.path.join(save_data_path,'windows')
+    windows_jpg_path = os.path.join(save_data_path,'windows-jpg')
 
     # If only a single filename is given, convert this to list
     if isinstance(mtrx_paths, str):
@@ -386,6 +387,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                 
                     # Create path for the WINDOWS data save
                     windows_full_path = create_folder_path(windows_path, sub_dir=windows_relative_save_path, collate=collate)
+                    windows_jpg_full_path = create_folder_path(windows_jpg_path, sub_dir=windows_relative_save_path, collate=collate)
 
                     # # Save windows
                     if together: 
@@ -405,7 +407,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
 
                     if save_window_jpgs:
                         # Create path for the WINDOWS data save
-                        windows_full_path_jpgs = create_folder_path(windows_path, sub_dir=windows_relative_save_path+'/jpg', collate=collate)
+                        windows_full_path_jpgs = create_folder_path(windows_jpg_path, sub_dir=windows_relative_save_path, collate=collate)
                         save_image_windows_as_jpg(img_windows, coordinates, windows_full_path_jpgs, base_filename=windows_base_save_file_name, verbose=verbose)
 
                     # Save the metadata as a text file 
@@ -543,7 +545,8 @@ def delete_data_folders(data_path, subdirectories=None, override=False):
     elif isinstance(subdirectories, list):
         folders_to_delete = subdirectories
     else:
-        folders_to_delete = ["jpg", "windows", "raw"]
+        print("Error: please specify subdirectories to be deleted by adding 'subdirectories=...'")
+        return
 
     # Create full paths for each folder to delete
     full_paths = [os.path.join(data_path, folder) for folder in folders_to_delete]
