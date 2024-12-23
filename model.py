@@ -241,7 +241,7 @@ def create_tf_dataset_batched(file_paths, batch_size=16, buffer_size=1000, is_au
 # ============================================================================
 
 
-def save_model(model, model_path, model_name='autoencoder'):
+def save_model(model, model_path, model_name='autoencoder', model_train_time=''):
     """
     Saves the given model to the specified path, ensuring the directory exists.
 
@@ -254,13 +254,20 @@ def save_model(model, model_path, model_name='autoencoder'):
     if not os.path.exists(model_path):
         os.makedirs(model_path)
 
-    # Add date/time to the model name
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    model_file_path = os.path.join(model_path, f"{model_name}_{timestamp}.keras")
-
     # Save the model
+    model_name_output = f"{model_name}.keras"
+    model_file_path = os.path.join(model_path, model_name_output)
     model.save(model_file_path)
     print(f"Model saved at: {model_file_path}")
+
+    # Add date/time to the model name
+    if model_train_time != '':
+        model_name_output = f"{model_name}_{model_train_time}.keras"
+        model_file_path = os.path.join(model_path, model_name_output)
+        model.save(model_file_path)
+        print(f"Backup of the model with time stamp saved at model saved at: {model_file_path}")
+
+    
 
 
 
@@ -286,64 +293,66 @@ def load_model(model_path, model_name='autoencoder', compile_model=False):
     return loaded_model
 
 
-def save_history(history, model_path, model_name='autoencoder', 
-                 loss_name='loss', val_loss_name='val_loss', 
-                 metrics=None, val_metrics=None):
-    """
-    Saves the training history to a text file in the same directory as the model.
+# def save_history(history, model_path, model_name='autoencoder', 
+#                  loss_name='loss', val_loss_name='val_loss', 
+#                  metrics=None, val_metrics=None,
+#                  model_name='', 
+#                  model_train_time=''):
+#     """
+#     Saves the training history to a text file in the same directory as the model.
     
-    Parameters:
-    - history: The history object returned by the `model.fit()` method.
-    - model_path: The directory where the model and history will be saved.
-    - model_name: The name of the history file (without extension). Default is 'autoencoder'.
-    - loss_name: The name of the training loss metric in the history. Default is 'loss'.
-    - val_loss_name: The name of the validation loss metric in the history. Default is 'val_loss'.
-    - metrics: A list of names of training metrics to be included in the history. Default is None.
-    - val_metrics: A list of names of validation metrics to be included in the history. Default is None.
-    """
-    # Ensure the directory exists, create it if it doesn't
-    if not os.path.exists(model_path):
-        os.makedirs(model_path)
+#     Parameters:
+#     - history: The history object returned by the `model.fit()` method.
+#     - model_path: The directory where the model and history will be saved.
+#     - model_name: The name of the history file (without extension). Default is 'autoencoder'.
+#     - loss_name: The name of the training loss metric in the history. Default is 'loss'.
+#     - val_loss_name: The name of the validation loss metric in the history. Default is 'val_loss'.
+#     - metrics: A list of names of training metrics to be included in the history. Default is None.
+#     - val_metrics: A list of names of validation metrics to be included in the history. Default is None.
+#     """
+#     # Ensure the directory exists, create it if it doesn't
+#     if not os.path.exists(model_path):
+#         os.makedirs(model_path)
 
-    # Add date/time to the history file name
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    history_path = os.path.join(model_path, f"{model_name}_history_{timestamp}.txt")
+#     # Add date/time to the history file name
+#     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+#     history_path = os.path.join(model_path, f"{model_name}_history_{timestamp}.txt")
 
-    # Extract history data
-    epochs = range(1, len(history.history[loss_name]) + 1)
-    train_loss = history.history[loss_name]
-    val_loss = history.history.get(val_loss_name, [])
+#     # Extract history data
+#     epochs = range(1, len(history.history[loss_name]) + 1)
+#     train_loss = history.history[loss_name]
+#     val_loss = history.history.get(val_loss_name, [])
 
-    # Open the file for writing
-    with open(history_path, 'w') as f:
-        # Write headers (loss and optional metrics)
-        headers = f"{'Epoch':<10}{'Train Loss':<15}{'Val Loss':<15}"
+#     # Open the file for writing
+#     with open(history_path, 'w') as f:
+#         # Write headers (loss and optional metrics)
+#         headers = f"{'Epoch':<10}{'Train Loss':<15}{'Val Loss':<15}"
         
-        # If metrics are provided, add them to the headers
-        if metrics:
-            for metric in metrics:
-                headers += f"{'Train ' + metric:<15}"
-        if val_metrics:
-            for val_metric in val_metrics:
-                headers += f"{'Val ' + val_metric:<15}"
-        f.write(headers + "\n")
+#         # If metrics are provided, add them to the headers
+#         if metrics:
+#             for metric in metrics:
+#                 headers += f"{'Train ' + metric:<15}"
+#         if val_metrics:
+#             for val_metric in val_metrics:
+#                 headers += f"{'Val ' + val_metric:<15}"
+#         f.write(headers + "\n")
 
-        # Write values for each epoch
-        for epoch in epochs:
-            # Basic loss values
-            line = f"{epoch:<10}{train_loss[epoch-1]:<15.5f}{val_loss[epoch-1] if val_loss else '':<15.5f}"
+#         # Write values for each epoch
+#         for epoch in epochs:
+#             # Basic loss values
+#             line = f"{epoch:<10}{train_loss[epoch-1]:<15.5f}{val_loss[epoch-1] if val_loss else '':<15.5f}"
             
-            # Add train and validation metrics, if provided
-            if metrics:
-                for metric in metrics:
-                    line += f"{history.history[metric][epoch-1]:<15.5f}"
-            if val_metrics:
-                for val_metric in val_metrics:
-                    line += f"{history.history[val_metric][epoch-1]:<15.5f}"
+#             # Add train and validation metrics, if provided
+#             if metrics:
+#                 for metric in metrics:
+#                     line += f"{history.history[metric][epoch-1]:<15.5f}"
+#             if val_metrics:
+#                 for val_metric in val_metrics:
+#                     line += f"{history.history[val_metric][epoch-1]:<15.5f}"
             
-            f.write(line + "\n")
+#             f.write(line + "\n")
 
-    print(f"History saved to {history_path}")
+#     print(f"History saved to {history_path}")
 
 
 
@@ -479,6 +488,8 @@ def plot_training_history(history,
                           metric_names=['mse', 'mae'], 
                           val_metric_names=['val_mse', 'val_mae'],
                           save_to_disk=False,
+                          model_name='', 
+                          model_train_time='',
                           output_path=None,
                           dpi=150):
     """
@@ -543,7 +554,10 @@ def plot_training_history(history,
     # Display or save the plot
     if save_to_disk:
         if output_path:
-            output_path = output_path + '/history.jpg'
+            if model_train_time != '':
+                output_path = output_path + '/' + model_name+'_' + model_train_time + '_history.jpg'
+            else: 
+                output_path = output_path + '/' + model_name+'_history.jpg'
             plt.savefig(output_path, format='jpg', dpi=dpi)
             print(f"Plot saved to {output_path}")
         else:
