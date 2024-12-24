@@ -634,9 +634,12 @@ def load_coordinates_file(windows_predict_path):
     """
     # Extract the last part of the given path
     base_name = os.path.basename(windows_predict_path)
-
-    # Construct the filename by appending '_coordinates.txt' to the base name
-    coordinates_file_name = f"{base_name}_coordinates.txt"
+    
+    if 'coordinates' not in base_name:
+        # Construct the filename by appending '_coordinates.txt' to the base name
+        coordinates_file_name = f"{base_name}_coordinates.txt"
+    else:
+        coordinates_file_name = windows_predict_path
 
     # Construct the full path to the coordinates file
     coordinates_file_path = os.path.join(windows_predict_path, coordinates_file_name)
