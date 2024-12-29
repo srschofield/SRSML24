@@ -858,11 +858,11 @@ def extract_image_windows(image, px=128, pitch=128):
             coordinates.append([window_number, x, y])
             window_number += 1
 
-            if window.shape[0] != 32 or window.shape[1] != 32:
-                print('\n\n*************\n window number {}: {} {}\n\n'.format(window_number, window.shape[0],window.shape[1]))
+            # if window.shape[0] != 32 or window.shape[1] != 32:
+            #     print('\n\n*************\n window number {}: {} {}\n\n'.format(window_number, window.shape[0],window.shape[1]))
                 
-                plt.imshow(window)
-                plt.show()
+            #     plt.imshow(window)
+            #     plt.show()
 
     return np.array(windows), np.array(coordinates)
 
