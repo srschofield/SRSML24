@@ -668,7 +668,7 @@ def visualize_reconstruction(model, test_image):
 
 
 def display_reconstructed_and_cluster_images(reconstructed_img, cluster_img, show_overlay=True, 
-                                             save_to_disk=False, output_path=None, predictions_time_stamp='', image_name='img', dpi=150):
+                                             save_to_disk=False, output_path=None, image_name='img', dpi=150):
     """
     Display side-by-side images: the reconstructed input image, the cluster labels,
     and optionally an overlay of the reconstructed image with cluster labels on top.
@@ -688,13 +688,10 @@ def display_reconstructed_and_cluster_images(reconstructed_img, cluster_img, sho
     - None: This function either displays the plot or saves it to disk based on save_to_disk.
     """
 
-    
-
     # Output directory with timestamp
-    predictions_path = os.path.join(output_path, f'predictions/{predictions_time_stamp}')
-    if not os.path.exists(predictions_path):
-        os.makedirs(predictions_path)
-        print(f"Directory created: {predictions_path}")
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
+        print(f"Directory created: {output_path}")
 
     # Determine the number of subplots based on show_overlay
     n_plots = 3 if show_overlay else 2
@@ -722,7 +719,7 @@ def display_reconstructed_and_cluster_images(reconstructed_img, cluster_img, sho
     # Save to disk or display
     if save_to_disk:
         if output_path:
-            output_path = os.path.join(predictions_path, f"{image_name}.jpg")
+            output_path = os.path.join(output_path, f"{image_name}.jpg")
             plt.savefig(output_path, format='jpg', dpi=dpi)
             print(f"Image saved to {output_path} with dpi={dpi}")
         else:
