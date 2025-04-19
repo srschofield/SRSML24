@@ -387,7 +387,8 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                 
                     # Create path for the WINDOWS data save
                     windows_full_path = create_folder_path(windows_path, sub_dir=windows_relative_save_path, collate=collate)
-                    windows_jpg_full_path = create_folder_path(windows_jpg_path, sub_dir=windows_relative_save_path, collate=collate)
+                    if save_window_jpgs:
+                        windows_jpg_full_path = create_folder_path(windows_jpg_path, sub_dir=windows_relative_save_path, collate=collate)
 
                     # # Save windows
                     if together: 

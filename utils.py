@@ -137,3 +137,19 @@ def plot_colormaps_image_grid(image, ncols=None, figwidth=20, title_fontsize=12)
 
     plt.tight_layout()
     plt.show()
+
+
+def pad_cluster_image(img,cluster_img,window_size):
+    imgx, imgy = img.shape
+    cluster_imgx, cluster_imgy = cluster_img.shape
+
+    # Calculate padding size
+    pad_size_window = window_size // 2
+    pad_size_remainder_x = imgx - cluster_imgx - pad_size_window
+    pad_size_remainder_y = imgy - cluster_imgy - pad_size_window
+
+    # Apply padding
+    # Here, ((top, bottom), (left, right)) specifies the padding for 2D
+    padded_cluster_image = np.pad(cluster_img, ((pad_size_window, pad_size_remainder_x), (pad_size_window, pad_size_remainder_y)), mode='constant', constant_values=0)
+
+    return padded_cluster_image

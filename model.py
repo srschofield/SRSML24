@@ -23,6 +23,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
 
+import json
+import pickle
+
 import tensorflow as tf
 from tensorflow.keras import layers
 
@@ -482,88 +485,152 @@ def build_autoencoder(window_size, model_name='autoencoder'):
 # Model training information
 # ============================================================================
 
-def plot_training_history(history, 
-                          loss_name='loss', 
-                          val_loss_name='val_loss', 
-                          metric_names=['mse', 'mae'], 
-                          val_metric_names=['val_mse', 'val_mae'],
-                          save_to_disk=False,
-                          model_name='', 
-                          model_train_time='',
-                          output_path=None,
-                          dpi=150):
+def save_history(history, model_name, model_path, model_train_time=''):
     """
-    Plots the training and validation loss and metrics from the history object returned by model.fit().
-    
+    Saves the Keras History or a history-like dict to disk as a .dat (pickle) file.
+    Filename: '{model_name}_{model_train_time}_history_data.dat', omitting empty parts.
+
     Parameters:
-    history: History object
-        The history object returned by the model.fit() function.
-    loss_name: str, optional
-        The name of the loss key in the history object. Default is 'loss'.
-    val_loss_name: str, optional
-        The name of the validation loss key in the history object. Default is 'val_loss'.
-    metric_names: list of str, optional
-        The names of the training metric keys in the history object. Default is ['mse', 'mae'].
-    val_metric_names: list of str, optional
-        The names of the validation metric keys in the history object. Default is ['val_mse', 'val_mae'].
-    save_to_disk: bool, optional
-        If True, saves the plot to disk instead of displaying it on screen. Default is False.
-    output_path: str, optional
-        The path to save the plot if save_to_disk is True. Must be specified if save_to_disk is True.
+    -----------
+    history: History object or dict
+        If a Keras History, its `.history` attribute will be used. If it's already a dict,
+        it will be saved directly.
+    model_name: str
+        Identifier for the model, used in the filename.
+    model_path: str
+        Directory where the file will be saved.
+    model_train_time: str, optional
+        Timestamp or descriptor to include in the filename.
+
+    Returns:
+    --------
+    str: The full path to the saved .dat file.
     """
-    # Extract values from history
-    loss = history.history.get(loss_name, None)
-    val_loss = history.history.get(val_loss_name, None)
-    
-    # Extract metrics
-    metrics = {metric: history.history.get(metric, None) for metric in metric_names}
-    val_metrics = {val_metric: history.history.get(val_metric, None) for val_metric in val_metric_names}
-    
+    # Extract raw data dict
+    data = history.history if hasattr(history, 'history') else history
+    # Ensure directory exists
+    os.makedirs(model_path, exist_ok=True)
+    # Build filename parts, skipping empty
+    parts = [model_name, model_train_time, 'history_data']
+    file_base = '_'.join([p for p in parts if p])
+    file_name = f"{file_base}.dat"
+    file_path = os.path.join(model_path, file_name)
+    # Save via pickle
+    with open(file_path, 'wb') as f:
+        pickle.dump(data, f)
+    # Notify user
+    print(f"The training history data has been saved to disk as a binary pickle file in: {file_path}")
+    return file_path
+
+
+def plot_history_from_file(file_path,
+                           loss_name='loss',
+                           val_loss_name='val_loss',
+                           metric_names=None,
+                           val_metric_names=None,
+                           dpi=150,
+                           show_plot=True):
+    """
+    Loads training history from a .dat (pickle) or .json file and plots loss and metrics,
+    optionally showing and saving the figure as a JPG.
+
+    Parameters:
+    -----------
+    file_path: str
+        Path to the history file (.dat or .json).
+    loss_name: str
+        Key for training loss. Default 'loss'.
+    val_loss_name: str
+        Key for validation loss. Default 'val_loss'.
+    metric_names: list of str
+        Training metric keys. Defaults to ['mse', 'mae'] if None.
+    val_metric_names: list of str
+        Validation metric keys. Defaults to ['val_mse', 'val_mae'] if None.
+    model_name: str
+        Optional identifier for output filename.
+    model_train_time: str
+        Optional timestamp for output filename.
+    output_dir: str
+        Directory to save the plot JPG. If None, saves next to history file.
+    dpi: int
+        Resolution for saved figure.
+    show_plot: bool
+        If True, calls plt.show() to display the figure.
+
+    Returns:
+    --------
+    str: Path where the plot was saved.
+    """
+    # Load history
+    _, ext = os.path.splitext(file_path)
+    if ext.lower() == '.dat':
+        with open(file_path, 'rb') as f:
+            history = pickle.load(f)
+    elif ext.lower() == '.json':
+        with open(file_path, 'r') as f:
+            history = json.load(f)
+    else:
+        raise ValueError(f"Unsupported extension: {ext}")
+
+    # Defaults
+    if metric_names is None:
+        metric_names = ['mse', 'mae']
+    if val_metric_names is None:
+        val_metric_names = ['val_mse', 'val_mae']
+
+    # Extract data series
+    loss = history.get(loss_name)
+    val_loss = history.get(val_loss_name)
+    metrics = {m: history.get(m) for m in metric_names}
+    val_metrics = {vm: history.get(vm) for vm in val_metric_names}
     epochs = range(1, len(loss) + 1) if loss else []
-    
+
+    # Plot
     plt.figure(figsize=(12, 5))
-    
-    # Plot Loss
+    # Loss subplot
     if loss and val_loss:
         plt.subplot(1, 2, 1)
         plt.plot(epochs, loss, label='Training Loss')
         plt.plot(epochs, val_loss, label='Validation Loss')
         plt.title('Loss over Epochs')
-        plt.xlabel('Epochs')
+        plt.xlabel('Epoch')
         plt.ylabel('Loss')
         plt.legend()
     else:
-        print("Loss data is not available in the provided history object.")
-    
-    # Plot Metrics
-    if metrics and val_metrics:
-        plt.subplot(1, 2, 2)
-        for metric, val_metric in zip(metric_names, val_metric_names):
-            if metrics[metric] is not None and val_metrics[val_metric] is not None:
-                plt.plot(epochs, metrics[metric], label=f'Training {metric}')
-                plt.plot(epochs, val_metrics[val_metric], label=f'Validation {val_metric}', linestyle='dashed')
-        plt.title('Metrics over Epochs')
-        plt.xlabel('Epochs')
-        plt.ylabel('Metric Value')
-        plt.legend()
-    else:
-        print("Metric data is not available in the provided history object.")
-    
+        print("Warning: Missing loss or val_loss in history.")
+    # Metrics subplot
+    plt.subplot(1, 2, 2)
+    for m, vm in zip(metric_names, val_metric_names):
+        tr = metrics.get(m)
+        vl = val_metrics.get(vm)
+        if tr and vl:
+            plt.plot(epochs, tr, label=f'Train {m}')
+            plt.plot(epochs, vl, linestyle='--', label=f'Val {m}')
+    plt.title('Metrics over Epochs')
+    plt.xlabel('Epoch')
+    plt.ylabel('Value')
+    plt.legend()
     plt.tight_layout()
-    
-    # Display or save the plot
-    if save_to_disk:
-        if output_path:
-            if model_train_time != '':
-                output_path = output_path + '/' + model_name+'_' + model_train_time + '_history.jpg'
-            else: 
-                output_path = output_path + '/' + model_name+'_history.jpg'
-            plt.savefig(output_path, format='jpg', dpi=dpi)
-            print(f"Plot saved to {output_path}")
-        else:
-            print("Error: output_path must be specified when save_to_disk is True.")
-    else:
+
+    # Show plot if requested
+    if show_plot:
         plt.show()
+
+    # # Determine save path
+    # if output_dir:
+    #     os.makedirs(output_dir, exist_ok=True)
+    #     parts = [model_name, model_train_time, 'history']
+    #     base = '_'.join([p for p in parts if p]) + '.jpg'
+    #     out_path = os.path.join(output_dir, base)
+    # else:
+    #     out_path = os.path.splitext(file_path)[0] + '.jpg'
+
+    out_path = os.path.splitext(file_path)[0] + '.jpg'
+    plt.savefig(out_path, format='jpg', dpi=dpi)
+    plt.close()
+    return out_path
+
+
 
 
 
