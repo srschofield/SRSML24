@@ -19,7 +19,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import colormaps  # Import the new colormap module
 
+import pandas as pd
+import inspect
 
+
+import os
+from datetime import datetime
+from IPython.display import display
 
 # ============================================================================
 # General Image stuff
@@ -153,3 +159,42 @@ def pad_cluster_image(img,cluster_img,window_size):
     padded_cluster_image = np.pad(cluster_img, ((pad_size_window, pad_size_remainder_x), (pad_size_window, pad_size_remainder_y)), mode='constant', constant_values=0)
 
     return padded_cluster_image
+
+
+def summarize_parameters(parameter_names, save_path=None):
+    """
+    Generates a summary table of variable names and their corresponding values.
+
+    Parameters:
+    parameter_names (list): List of variable names as strings.
+    save_path (str, optional): Directory path where the summary CSV will be saved.
+
+    Returns:
+    pd.DataFrame: DataFrame containing variable names and their values.
+    """
+    # Retrieve the caller's local variables
+    frame = inspect.currentframe().f_back
+    local_vars = frame.f_locals
+
+    # Map variable names to their values
+    data = []
+    for name in parameter_names:
+        value = local_vars.get(name, 'undefined')
+        data.append({'Parameter': name, 'Value': value})
+
+    # Create the DataFrame
+    df = pd.DataFrame(data)
+
+    # Display the DataFrame
+    #display(df)
+
+    # Save to CSV if a path is provided
+    if save_path:
+        os.makedirs(save_path, exist_ok=True)
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"parameter_summary_{timestamp}.csv"
+        csv_path = os.path.join(save_path, filename)
+        df.to_csv(csv_path, index=False)
+        print(f"Saved parameter summary to {csv_path}")
+
+    return df
