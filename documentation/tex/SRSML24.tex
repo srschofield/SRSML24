@@ -1,0 +1,160 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{hyperref}
+\geometry{margin=1in}
+
+\usepackage{longtable}
+\usepackage{array}
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+
+\title{SRSML24: STM Machine Learning Module}
+\author{Steven R. Schofield}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section*{Overview}
+This module provides tools for machine learning analysis of scanning tunnelling microscopy (STM) data, including autoencoder models, clustering tools, and STM-specific preprocessing.
+
+\section*{Getting the Code}
+Clone the repository from GitHub:
+
+\begin{verbatim}
+git clone https://github.com/srschofield/SRSML24.git
+\end{verbatim}
+
+\section*{Installation}
+It is recommended to create a clean Python environment using \texttt{conda}. The following steps assume you are working on a macOS system with Apple Silicon:
+
+\begin{verbatim}
+# create and activate environment
+conda create --name srsml24 python=3.8 -y
+conda activate srsml24
+
+# install packages
+pip install -r requirements-macos.txt
+\end{verbatim}
+
+\subsection*{Known Working Configuration}
+This module has been tested and is known to work with the following configuration on macOS 15.0.1 (Apple Silicon, M3 Pro chip):
+
+\begin{itemize}
+  \item \texttt{python==3.8}
+  \item \texttt{tensorflow-macos==2.16.2}
+  \item \texttt{tensorflow-metal==1.1.0}
+  \item \texttt{numpy==1.24.3}
+  \item \texttt{pandas==1.5.3}
+  \item \texttt{matplotlib==3.7.1}
+  \item \texttt{scikit-learn==1.3.0}
+  \item \texttt{scipy==1.10.1}
+  \item \texttt{opencv-python==4.8.1.78}
+  \item \texttt{Pillow==9.5.0}
+  \item \texttt{joblib==1.3.2}
+  \item \texttt{jupyter==1.0.0}
+  \item \texttt{ipykernel==6.29.3}
+  \item \texttt{keras-core==0.1.6}
+  \item \texttt{spiepy==0.1.6}
+  \item \texttt{access2thematrix==0.1.3}
+\end{itemize}
+
+These packages can be installed using the \texttt{requirements-macos.txt} file. The Python version is critical: other versions may cause compatibility issues with TensorFlow or other packages on Apple Silicon.
+
+\section*{Python Files}
+\begin{itemize}
+  \item \texttt{data\_prep.py} – Functions for data preparation, including slicing STM images into windows and saving them in efficient formats.
+  \item \texttt{model.py} – Defines convolutional autoencoder and UNET-style models.
+  \item \texttt{utils.py} – Utility functions for loading/saving models, feature arrays, and results.
+\end{itemize}
+
+\section*{Example Data and Scripts}
+\begin{itemize}
+  \item \texttt{example\_data/} – Example STM data and latent feature arrays.
+  \item \texttt{examples/} – Scripts demonstrating usage of the module, including training and inference workflows.
+\end{itemize}
+
+\section*{License}
+This work is licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International License (CC BY-NC-SA 4.0).  
+You are free to:
+\begin{itemize}
+  \item \textbf{Share} — copy and redistribute the material in any medium or format
+  \item \textbf{Adapt} — remix, transform, and build upon the material
+\end{itemize}
+Under the following terms:
+\begin{itemize}
+  \item \textbf{Attribution} — You must give appropriate credit, provide a link to the license, and indicate if changes were made.
+  \item \textbf{NonCommercial} — You may not use the material for commercial purposes.
+  \item \textbf{ShareAlike} — If you remix, transform, or build upon the material, you must distribute your contributions under the same license.
+\end{itemize}
+
+To view a copy of this license, visit:  
+\href{https://creativecommons.org/licenses/by-nc-sa/4.0/}{https://creativecommons.org/licenses/by-nc-sa/4.0/}
+
+\section*{Parameter Summary}
+
+\begin{longtable}{L{0.3\textwidth} L{0.65\textwidth}}
+\textbf{Parameter} & \textbf{Description} \\
+\hline
+\endfirsthead
+
+\textbf{Parameter} & \textbf{Description} \\
+\hline
+\endhead
+
+\multicolumn{2}{l}{\textbf{General}} \\
+\texttt{job\_name} & Label for the run, it will be the folder name for output. \\
+\texttt{verbose} & If \texttt{True}, enables more detailed print output. \\
+
+\hline
+\multicolumn{2}{l}{\textbf{Matrix data file processing}} \\ 
+\texttt{flatten\_method} & Method used to flatten STM images before analysis. Options are `none', `iterate\_mask', `poly\_xy'.\\
+\texttt{pixel\_density} & All images will be converted to this pixel density (px/nm). \\
+\texttt{pixel\_ratio} & Images that have ratio of fast/slow scan direction less than this will be discared. Setting to 1 means only complete (square) images are kept.\\
+\texttt{data\_scaling} & Multiplicative factor for z-height data. Setting to 1.e9 means that the range 0--1 (used for training) corresponds to 1 nm.\\
+
+\hline
+\multicolumn{2}{l}{\textbf{Window generation}} \\ 
+\texttt{window\_size} & Side length of square image windows (in pixels). \\
+\texttt{window\_pitch} & Spacing between adjacent windows during tiling. \\
+
+\hline
+\multicolumn{2}{l}{\textbf{Data saving}} \\
+
+\multicolumn{2}{l}{(Should remain defaults but options can be useful for examining data manually.)}\\
+\texttt{save\_windows} & If \texttt{True}, saves image windows as \texttt{.npy} files (True).\\
+\texttt{together} & If \texttt{True}, saves windows per image in a single file (True). \\
+\texttt{save\_jpg} & If \texttt{True}, saves full STM images as JPGs (False).\\ 
+\texttt{collate} & If \texttt{True}, flattens directory structure into one folder. (False). \\
+\texttt{save\_window\_jpgs} & If \texttt{True}, saves image windows as JPGs. (False)\\
+
+\hline
+\multicolumn{2}{l}{\textbf{Autoencoder}} \\ 
+\texttt{model\_name} & Label used to save and load the trained autoencoder model. \\
+\texttt{batch\_size} & Number of windows per training batch. \\
+\texttt{buffer\_size} & Size of shuffle buffer. \\
+\texttt{learning\_rate} & Learning rate for the optimizer. \\
+\texttt{epochs} & Number of training epochs. \\
+
+\hline
+\multicolumn{2}{l}{\textbf{Clustering}} \\ 
+\texttt{cluster\_model\_name} & Name used when saving the clustering model. \\
+\texttt{cluster\_batch\_size} & Number of latent vectors per clustering batch. \\
+\texttt{cluster\_buffer\_size} & Size of buffer for clustering shuffle. \\
+\texttt{num\_clusters} & Number of clusters to form using KMeans. \\
+\texttt{n\_init} & Number of initializations for KMeans. \\
+\texttt{max\_iter} & Max iterations for KMeans convergence. \\
+\texttt{reassignment\_ratio} & Fraction of centroids reassigned each step. \\
+
+\hline
+\multicolumn{2}{l}{\textbf{Image prediction}} \\ 
+\texttt{predict\_window\_pitch} & Window spacing during prediction step. \\
+\texttt{mtrx\_train\_data\_limit} & Max number of training MTRX files to use. \\
+\texttt{mtrx\_test\_data\_limit} & Max number of validation MTRX files to use. \\
+\texttt{train\_data\_limit} & Limit on number of training windows. \\
+\texttt{test\_data\_limit} & Limit on number of validation windows. \\
+\end{longtable}
+
+\end{document}

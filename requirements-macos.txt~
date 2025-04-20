@@ -1,0 +1,22 @@
+# TensorFlow for Apple Silicon
+tensorflow-macos
+tensorflow-metal
+
+# Core scientific and ML stack
+numpy
+pandas
+matplotlib
+scikit-learn
+scipy
+opencv-python
+Pillow
+joblib
+
+# Jupyter notebook support
+jupyter
+ipykernel
+
+# Additional packages used in your module
+keras-core
+spiepy
+access2thematrix
