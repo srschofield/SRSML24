@@ -23,6 +23,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
 
+import io
+from contextlib import redirect_stdout
+
+
 import json
 import pickle
 
@@ -478,6 +482,50 @@ def build_autoencoder(window_size, model_name='autoencoder'):
     model = tf.keras.Model(inputs=inputs, outputs=outputs, name=model_name)
     
     return model
+
+def save_model_summary(model, model_path, model_name):
+    os.makedirs(model_path, exist_ok=True)
+    parts = [model_name, 'model_summary']
+    file_base = '_'.join([p for p in parts if p])
+    file_name = f"{file_base}.txt"
+    file_path = os.path.join(model_path, file_name)
+    
+    with open(file_path, 'w') as f:
+        with redirect_stdout(f):
+            model.summary()
+
+def save_model_diagram(model, model_path, model_name='model',
+                       show_shapes=False, show_layer_names=False, expand_nested=False):
+    """
+    Saves a PNG diagram of the Keras model architecture using plot_model.
+    Falls back gracefully if pydot or Graphviz are not installed.
+    
+    Parameters:
+        model (tf.keras.Model): The model to visualize.
+        model_path (str): Directory to save the image.
+        model_name (str): Base name to use in the output filename.
+        show_shapes (bool): Whether to show output shapes on the diagram.
+        show_layer_names (bool): Whether to show layer names on the diagram.
+        expand_nested (bool): Whether to expand nested models (e.g. submodules).
+    """
+    try:
+        from tensorflow.keras.utils import plot_model
+        os.makedirs(model_path, exist_ok=True)
+        file_path = os.path.join(model_path, f"{model_name}_model_summary.png")
+        
+        plot_model(model,
+                   to_file=file_path,
+                   show_shapes=show_shapes,
+                   show_layer_names=show_layer_names,
+                   expand_nested=expand_nested)
+        
+        print(f"[Info] Model diagram saved to {file_path}")
+        
+    except (ImportError, OSError) as e:
+        print(f"[Warning] Could not generate model diagram. Reason: {e}")
+        print("To enable this feature, install:\n"
+              "  pip install pydot graphviz\n"
+              "  brew install graphviz  # or apt install graphviz")
 
 
 
