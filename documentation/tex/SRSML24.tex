@@ -3,7 +3,7 @@
 \usepackage[T1]{fontenc}
 \usepackage{geometry}
 \usepackage{hyperref}
-
+\usepackage{graphicx}
 \usepackage{longtable}
 \usepackage{array}
 
@@ -169,6 +169,43 @@ The initial step in utilizing the SRSML24 module involves converting raw STM dat
 \end{itemize}
 
 This function ensures that STM data is preprocessed consistently, facilitating reliable training and evaluation of machine learning models within the SRSML24 framework. It will create a new directory called ``windows'' and subfolders under that with the names corresponding to the folders the matrix data was stored in (e.g., ``training'' or ``testing''). Unless the ``collate'' variable is set, the windowed data will retain the full directory structure (dates, days, etc) of the matrix data. The individual windows for a given folder of matrix data are all stored within a single .npy file, rather than separate .npy files for each window, since this is much more efficient for data saving and retrieving. Two text files are also saved, one has the meta data (STM bias voltage, current, etc.). The other has the coordinates for each window in the dataset. This is useful since these are not uniform at two edges of the original image for the general case where the full image is not perfectly divided by the dimensions of the individual windows. 
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.4\textwidth]{figs/default_2011Jan07-144939_STM-STM_Spectroscopy--1_1_BD_none}
+\hspace{1em}\includegraphics[width=0.4\textwidth]{figs/default_2011Jan07-144939_STM-STM_Spectroscopy--1_1_BD_poly_xy}
+\caption{Typical scanning tunnelling microscopy (STM) image. (Left) raw data. (Right) After poly\_xy background subtraction.}
+\label{fig:stm}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.07\textwidth]{figs/default_2011Jan07-144939_STM-STM_Spectroscopy--1_1_BD_00032}
+\hspace{0.2em}
+\includegraphics[width=0.07\textwidth]{figs/default_2011Jan07-144939_STM-STM_Spectroscopy--1_1_BD_00033}
+\hspace{0.2em}
+\includegraphics[width=0.07\textwidth]{figs/default_2011Jan07-144939_STM-STM_Spectroscopy--1_1_BD_00034}
+\hspace{0.2em}
+\includegraphics[width=0.07\textwidth]{figs/default_2011Jan07-144939_STM-STM_Spectroscopy--1_1_BD_00035}
+\hspace{0.2em}
+\includegraphics[width=0.07\textwidth]{figs/default_2011Jan07-144939_STM-STM_Spectroscopy--1_1_BD_00036}
+\hspace{0.2em}
+\includegraphics[width=0.07\textwidth]{figs/default_2011Jan07-144939_STM-STM_Spectroscopy--1_1_BD_00037}
+\hspace{0.2em}
+\includegraphics[width=0.07\textwidth]{figs/default_2011Jan07-144939_STM-STM_Spectroscopy--1_1_BD_00038}
+\hspace{0.2em}
+\includegraphics[width=0.07\textwidth]{figs/default_2011Jan07-144939_STM-STM_Spectroscopy--1_1_BD_00039}
+\hspace{0.2em}
+\includegraphics[width=0.07\textwidth]{figs/default_2011Jan07-144939_STM-STM_Spectroscopy--1_1_BD_00040}
+\hspace{0.2em}
+\includegraphics[width=0.07\textwidth]{figs/default_2011Jan07-144939_STM-STM_Spectroscopy--1_1_BD_00041}
+\hspace{0.2em}
+\includegraphics[width=0.07\textwidth]{figs/default_2011Jan07-144939_STM-STM_Spectroscopy--1_1_BD_00042}
+\caption{A sequence of $30\times30$ pixel windows extracted from the STM image in Fig.~\ref{fig:stm} with an 8 pixel pitch.}
+\end{figure}
+
+
+
 
 
 \end{document}
