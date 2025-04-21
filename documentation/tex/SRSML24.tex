@@ -204,8 +204,61 @@ This function ensures that STM data is preprocessed consistently, facilitating r
 \caption{A sequence of $30\times30$ pixel windows extracted from the STM image in Fig.~\ref{fig:stm} with an 8 pixel pitch.}
 \end{figure}
 
+\section*{Step 2: Preparing Datasets and Training the Autoencoder}
 
+With windowed STM data in place, the next stage is to set up efficient TensorFlow data pipelines and train a convolutional autoencoder. This step handles the full model lifecycle, from data loading and batching to model training and saving the model and training history. These tools are provided by \texttt{model.py}, which we import as \texttt{m}, i.e., \texttt{import SRSML24.model as m}.
 
+\subsection*{Preparing Datasets with \texttt{tf.data}}
+
+To begin, window data stored as \texttt{.npy} files in \texttt{windows\_train\_path} and \texttt{windows\_test\_path} are listed. If it possible to choose a truncated subset of this list, e.g., to train on less data while optimising; this is done by setting the \texttt{train\_data\_limit} and \texttt{test\_data\_limit} parameters. These files are then loaded into TensorFlow \texttt{Dataset} objects for training and validation.
+
+The function \texttt{m.create\_tf\_dataset\_batched(file\_paths, batch\_size, buffer\_size, window\_size, is\_autoencoder, shuffle)} constructs a pipeline that:
+
+\begin{itemize}
+  \item \textbf{Loads image batches:} Reads window data from \texttt{.npy} files located at the specified paths.
+  \item \textbf{Shuffles window order:} When \texttt{shuffle=True}, randomizes input order to enhance model generalization.
+  \item \textbf{Batches the data:} Groups windows into batches of size \texttt{batch\_size}.
+  \item \textbf{Prefetches data:} Uses \texttt{prefetch(buffer\_size)} to improve throughput by overlapping data preparation with model training.
+  \item \textbf{Pairs inputs and targets:} For autoencoder training, each window is used as both the input and target.
+\end{itemize}
+
+\subsection*{Model Building and Training}
+
+Once the datasets are ready, the autoencoder can be constructed, compiled, and trained using the following workflow:
+
+\begin{itemize}
+  \item \textbf{Model instantiation:} 
+    \begin{itemize}
+      \item Use \texttt{m.build\_autoencoder(window\_size, model\_name)} to define the encoder–decoder architecture.
+      \item Call \texttt{model.summary()} to inspect the model structure.
+    \end{itemize}
+  \item \textbf{Optimizer selection:}
+    \begin{itemize}
+      \item On Apple Silicon/macOS systems, use \texttt{tf.keras.optimizers.legacy.RMSprop} for TensorFlow-metal compatibility.
+      \item On other systems, use the standard \texttt{tf.keras.optimizers.RMSprop}.
+    \end{itemize}
+  \item \textbf{Compilation:} Compile the model with:
+    \begin{itemize}
+      \item \texttt{loss='mean\_squared\_error'}
+      \item Metrics: \texttt{['mse', 'mae']}
+      \item Learning rate: from the \texttt{learning\_rate} parameter.
+    \end{itemize}
+  \item \textbf{Training:} Fit the model using:
+    \begin{itemize}
+      \item \texttt{train\_dataset} with \texttt{shuffle=True}
+      \item \texttt{validation\_data=test\_dataset}
+      \item The number of \texttt{epochs} and \texttt{verbose=1}
+    \end{itemize}
+  \item \textbf{Saving outputs and diagnostics:}
+    \begin{itemize}
+      \item Save the trained model using \texttt{m.save\_model(..., model\_train\_time)}.
+      \item Record training start/end times with \texttt{dp.current\_datetime()} and \texttt{dp.elapsed\_time()}.
+      \item Persist the training history with \texttt{m.save\_history(...)}.
+      \item Plot performance metrics via \texttt{m.plot\_history\_from\_file(...)}.
+    \end{itemize}
+\end{itemize}
+
+This produces a trained autoencoder model along with detailed training logs and performance plots, ready for use in clustering or anomaly detection tasks.
 
 
 \end{document}
