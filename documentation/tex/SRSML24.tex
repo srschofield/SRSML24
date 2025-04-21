@@ -247,18 +247,20 @@ Once the datasets are ready, the autoencoder can be constructed, compiled, and t
     \begin{itemize}
       \item \texttt{train\_dataset} with \texttt{shuffle=True}
       \item \texttt{validation\_data=test\_dataset}
-      \item The number of \texttt{epochs} and \texttt{verbose=1}
+      \item The number of \texttt{epochs}
     \end{itemize}
   \item \textbf{Saving outputs and diagnostics:}
     \begin{itemize}
       \item Save the trained model using \texttt{m.save\_model(..., model\_train\_time)}.
-      \item Record training start/end times with \texttt{dp.current\_datetime()} and \texttt{dp.elapsed\_time()}.
-      \item Persist the training history with \texttt{m.save\_history(...)}.
-      \item Plot performance metrics via \texttt{m.plot\_history\_from\_file(...)}.
+      \item Plot and save the training history with \texttt{m.plot\_history\_from\_file(...)}, \texttt{m.save\_history(...)}.
     \end{itemize}
 \end{itemize}
 
 This produces a trained autoencoder model along with detailed training logs and performance plots, ready for use in clustering or anomaly detection tasks.
 
-
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figs/autoencoder_summary}
+\caption{Example UNET autoencoder model summary.}
+\end{figure}
 \end{document}

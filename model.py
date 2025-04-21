@@ -373,115 +373,54 @@ def build_autoencoder(window_size, model_name='autoencoder'):
     tf.random.set_seed(42)
 
     # Define the input shape
-    inputs = tf.keras.Input(shape=(window_size, window_size, 1), name='Input_windows')
+    inputs = tf.keras.Input(shape=(window_size, window_size, 1), name='input')
     
-    # Encoder (Contracting Path)
-    c1 = layers.Conv2D(name='Convolutional_1',
-                       filters=32, 
-                       kernel_size=3, 
-                       activation='relu',
-                       padding='same',
-                       kernel_initializer='he_normal')(inputs)
+    # Encoder
+    c1 = layers.Conv2D(32, 3, activation='relu', padding='same',
+                       kernel_initializer='he_normal', name='conv1')(inputs)
+    d1 = layers.Dropout(0.1, name='drop1')(c1)
+    p1 = layers.MaxPooling2D(pool_size=2, name='pool1')(d1)
     
-    d1 = layers.Dropout(0.1, name='Dropout_1')(c1)
+    c2 = layers.Conv2D(64, 3, activation='relu', padding='same',
+                       kernel_initializer='he_normal', name='conv2')(p1)
+    d2 = layers.Dropout(0.1, name='drop2')(c2)
+    p2 = layers.MaxPooling2D(pool_size=2, name='pool2')(d2)
     
-    p1 = layers.MaxPooling2D(name='MaxPooling_1', pool_size=2)(d1)  # (window_size / 2, window_size / 2, 32)
+    c3 = layers.Conv2D(128, 3, activation='relu', padding='same',
+                       kernel_initializer='he_normal', name='conv3')(p2)
+    d3 = layers.Dropout(0.1, name='drop3')(c3)
+    p3 = layers.MaxPooling2D(pool_size=2, name='pool3')(d3)
     
-    c2 = layers.Conv2D(name='Convolutional_2',
-                       filters=64, 
-                       kernel_size=3, 
-                       activation='relu',
-                       padding='same',
-                       kernel_initializer='he_normal')(p1)
+    # Bottleneck
+    c4 = layers.Conv2D(256, 3, activation='relu', padding='same',
+                       kernel_initializer='he_normal', name='bottleneck')(p3)
     
-    d2 = layers.Dropout(0.1, name='Dropout_2')(c2)
+    # Decoder
+    u1 = layers.UpSampling2D(size=2, name='up1')(c4)
+    u1 = layers.Conv2D(128, 3, activation='relu', padding='same',
+                       kernel_initializer='he_normal', name='upconv1')(u1)
+    u1 = layers.concatenate([u1, c3], axis=-1, name='skip1')
+    c5 = layers.Conv2D(128, 3, activation='relu', padding='same',
+                       kernel_initializer='he_normal', name='conv4')(u1)
     
-    p2 = layers.MaxPooling2D(name='MaxPooling_2', pool_size=2)(d2)  # (window_size / 4, window_size / 4, 64)
+    u2 = layers.UpSampling2D(size=2, name='up2')(c5)
+    u2 = layers.Conv2D(64, 3, activation='relu', padding='same',
+                       kernel_initializer='he_normal', name='upconv2')(u2)
+    u2 = layers.concatenate([u2, c2], axis=-1, name='skip2')
+    c6 = layers.Conv2D(64, 3, activation='relu', padding='same',
+                       kernel_initializer='he_normal', name='conv5')(u2)
     
-    c3 = layers.Conv2D(name='Convolutional_3',
-                       filters=128, 
-                       kernel_size=3, 
-                       activation='relu',
-                       padding='same',
-                       kernel_initializer='he_normal')(p2)
+    u3 = layers.UpSampling2D(size=2, name='up3')(c6)
+    u3 = layers.Conv2D(32, 3, activation='relu', padding='same',
+                       kernel_initializer='he_normal', name='upconv3')(u3)
+    u3 = layers.concatenate([u3, c1], axis=-1, name='skip3')
+    c7 = layers.Conv2D(32, 3, activation='relu', padding='same',
+                       kernel_initializer='he_normal', name='conv6')(u3)
     
-    d3 = layers.Dropout(0.1, name='Dropout_3')(c3)
+    outputs = layers.Conv2D(1, 1, activation='sigmoid', padding='same', name='output')(c7)
     
-    p3 = layers.MaxPooling2D(name='MaxPooling_3', pool_size=2)(d3)  # (window_size / 8, window_size / 8, 128)
-    
-    # Bottleneck (lowest point in the U)
-    c4 = layers.Conv2D(name='Bottleneck',
-                       filters=256, 
-                       kernel_size=3, 
-                       activation='relu',
-                       padding='same',
-                       kernel_initializer='he_normal')(p3)
-    
-    # Decoder (Expansive Path)
-    u1 = layers.UpSampling2D(name='UpSampling_1', size=2)(c4)  # (window_size / 4, window_size / 4, 128)
-    u1 = layers.Conv2D(name='UpConv_1',
-                       filters=128, 
-                       kernel_size=3, 
-                       activation='relu',
-                       padding='same',
-                       kernel_initializer='he_normal')(u1)
-    
-    # Skip connection with c3
-    u1 = layers.concatenate([u1, c3], axis=-1, name='Skip_Connection_1')  # Match c3's dimensions
-    
-    c5 = layers.Conv2D(name='Convolutional_4',
-                       filters=128, 
-                       kernel_size=3, 
-                       activation='relu',
-                       padding='same',
-                       kernel_initializer='he_normal')(u1)
-    
-    u2 = layers.UpSampling2D(name='UpSampling_2', size=2)(c5)  # (window_size / 2, window_size / 2, 64)
-    u2 = layers.Conv2D(name='UpConv_2',
-                       filters=64, 
-                       kernel_size=3, 
-                       activation='relu',
-                       padding='same',
-                       kernel_initializer='he_normal')(u2)
-    
-    # Skip connection with c2
-    u2 = layers.concatenate([u2, c2], axis=-1, name='Skip_Connection_2')
-    
-    c6 = layers.Conv2D(name='Convolutional_5',
-                       filters=64, 
-                       kernel_size=3, 
-                       activation='relu',
-                       padding='same',
-                       kernel_initializer='he_normal')(u2)
-    
-    u3 = layers.UpSampling2D(name='UpSampling_3', size=2)(c6)  # (window_size, window_size, 32)
-    u3 = layers.Conv2D(name='UpConv_3',
-                       filters=32, 
-                       kernel_size=3, 
-                       activation='relu',
-                       padding='same',
-                       kernel_initializer='he_normal')(u3)
-    
-    # Skip connection with c1
-    u3 = layers.concatenate([u3, c1], axis=-1, name='Skip_Connection_3')
-    
-    c7 = layers.Conv2D(name='Convolutional_6',
-                       filters=32, 
-                       kernel_size=3, 
-                       activation='relu',
-                       padding='same',
-                       kernel_initializer='he_normal')(u3)
-    
-    outputs = layers.Conv2D(name='Output',
-                            filters=1, 
-                            kernel_size=1, 
-                            activation='sigmoid',  # Change to 'linear' if the task requires it
-                            padding='same')(c7)
-    
-    # Define the U-Net model with the specified name
-    model = tf.keras.Model(inputs=inputs, outputs=outputs, name=model_name)
-    
-    return model
+    return tf.keras.Model(inputs=inputs, outputs=outputs, name=model_name)
+
 
 def save_model_summary(model, model_path, model_name):
     os.makedirs(model_path, exist_ok=True)
