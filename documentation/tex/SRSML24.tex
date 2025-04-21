@@ -151,4 +151,24 @@ This work is licensed under the \href{https://creativecommons.org/licenses/by-nc
 \texttt{test\_data\_limit} & Limit on number of validation windows. \\
 \end{longtable}
 
+\pagebreak
+
+\section*{Step 1: Converting MATRIX STM Data Files}
+
+The initial step in utilizing the SRSML24 module involves converting raw STM data files from the Scienta Omicron MATRIX format into a standardized format suitable for machine learning analysis. This is accomplished using the \texttt{process\_mtrx\_files} function.
+
+\subsection*{Function Overview}
+
+\texttt{process\_mtrx\_files(mtrx\_paths, save\_data\_path, **kwargs)} is designed to batch process a list of MATRIX (\texttt{.mtrx}) files, performing the following operations:
+
+\begin{itemize}
+  \item \textbf{Loading Data:} Reads each \texttt{.mtrx} file and extracts image data along with associated metadata.
+  \item \textbf{Preprocessing:} Applies flattening methods to correct for background variations and rescales images to a consistent pixel density.
+  \item \textbf{Window Extraction:} Divides images into smaller windows of specified size and pitch, facilitating training of machine learning models.
+  \item \textbf{Saving Outputs:} Stores processed windows and optional JPEG representations in a structured directory hierarchy under \texttt{save\_data\_path}.
+\end{itemize}
+
+This function ensures that STM data is preprocessed consistently, facilitating reliable training and evaluation of machine learning models within the SRSML24 framework. It will create a new directory called ``windows'' and subfolders under that with the names corresponding to the folders the matrix data was stored in (e.g., ``training'' or ``testing''). Unless the ``collate'' variable is set, the windowed data will retain the full directory structure (dates, days, etc) of the matrix data. The individual windows for a given folder of matrix data are all stored within a single .npy file, rather than separate .npy files for each window, since this is much more efficient for data saving and retrieving. Two text files are also saved, one has the meta data (STM bias voltage, current, etc.). The other has the coordinates for each window in the dataset. This is useful since these are not uniform at two edges of the original image for the general case where the full image is not perfectly divided by the dimensions of the individual windows. 
+
+
 \end{document}
