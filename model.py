@@ -1132,6 +1132,53 @@ def train_kmeans(data_pipeline, batch_size=2048, num_clusters=10, n_init=10, max
     return kmeans, convergence_history
 
 
+def plot_kmeans_convergence(convergence_history, cluster_model_path, model_name, dpi=150):
+    """
+    Plots MiniBatchKMeans convergence over batches, excluding the final point
+    which may correspond to a smaller, less representative batch. Saves both
+    the plot and the raw inertia values (as plain text).
+
+    Parameters:
+        convergence_history (list): Inertia values recorded per batch.
+        cluster_model_path (str): Directory to save output files.
+        model_name (str): Base name for saved files.
+        dpi (int): Dots per inch for saved figure.
+    """
+    if len(convergence_history) <= 1:
+        print("[Warning] Not enough data to plot convergence.")
+        return
+
+    # Exclude final point
+    history_to_plot = convergence_history[:-1]
+
+    # Ensure output directory exists
+    os.makedirs(cluster_model_path, exist_ok=True)
+
+    # Define save paths
+    image_path = os.path.join(cluster_model_path, f"{model_name}_convergence.jpg")
+    txt_path = os.path.join(cluster_model_path, f"{model_name}_convergence.txt")
+
+    # Save raw inertia values as plain text (one per line)
+    with open(txt_path, 'w') as f:
+        for val in history_to_plot:
+            f.write(f"{val}\n")
+    print(f"[Info] Raw convergence data saved to {txt_path}")
+
+    # Plot
+    plt.figure(figsize=(8, 5))
+    epochs = list(range(1, len(history_to_plot) + 1))
+    plt.plot(epochs, history_to_plot, marker='o', linewidth=1.5)
+    plt.title("MiniBatchKMeans Convergence")
+    plt.xlabel("Batch Index")
+    plt.ylabel("Inertia")
+    plt.grid(True)
+    plt.tight_layout()
+
+    # Save plot
+    plt.savefig(image_path, dpi=dpi)
+    print(f"[Info] Convergence plot saved to {image_path}")
+    plt.show()
+
 
 def evaluate_and_visualize_clustering(latent_features, cluster_labels):
     """

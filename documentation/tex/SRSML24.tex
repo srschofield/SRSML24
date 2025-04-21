@@ -351,5 +351,91 @@ This step produces the following key results:
 \end{figure}
 
 
+\section*{Step 4: Making Cluster Predictions on New STM Images}
+
+In the final step, trained models are applied to new STM image data. This allows the latent features learned by the autoencoder, and the clustering patterns identified via KMeans, to be mapped onto previously unseen scans—highlighting recurring patterns, regions of interest, or anomalies.
+
+\subsection*{Preparing Prediction Data}
+
+STM images in the Scienta Omicron MATRIX format are first preprocessed into windowed image data using the same function as in Step 1:
+
+\begin{verbatim}
+dp.process_mtrx_files(
+    mtrx_predict_file_list,
+    job_data_path,
+    flatten_method = flatten_method,
+    pixel_density = pixel_density,
+    pixel_ratio = pixel_ratio,
+    data_scaling = data_scaling,
+    window_size = window_size, 
+    window_pitch = predict_window_pitch,
+    save_windows = save_windows,
+    save_window_jpgs = save_window_jpgs,
+    save_jpg = save_jpg,
+    together = together,
+    collate = collate,
+    verbose = verbose)
+\end{verbatim}
+
+The windows and coordinate files are saved in the same structure as the training set, enabling seamless integration with the trained models.
+
+\subsection*{Loading Trained Models}
+
+Both the autoencoder and clustering model are reloaded from disk:
+
+\begin{verbatim}
+autoencoder_model = m.load_model(model_path, model_name=model_name)
+cluster_model = m.load_cluster_model(cluster_model_path, model_name=cluster_model_name)
+\end{verbatim}
+
+\subsection*{Cluster Prediction Workflow}
+
+For each preprocessed STM image:
+
+\begin{enumerate}
+  \item \textbf{Window data and coordinates} are loaded from disk.
+  \item A full image is reconstructed from the original window tiles.
+  \item A TensorFlow data pipeline is built to pass the windows through the autoencoder.
+  \item The autoencoder encoder generates latent features for each window.
+  \item The clustering model assigns each window to a cluster.
+  \item Cluster labels are mapped back to image coordinates and rendered as a cluster map.
+  \item The result is optionally padded to match the original image dimensions.
+  \item A side-by-side visualization of the raw and clustered image is saved to disk.
+\end{enumerate}
+
+This workflow is handled in the following loop:
+
+\begin{verbatim}
+for prediction_file, coords_file in zip(predict_data_files_list, image_windows_coordinates_file_list):
+    ...
+    predict_dataset = m.create_tf_dataset_batched(...)
+    latent_features = m.extract_latent_features_to_disk_from_prebatched_windows(
+        autoencoder_model, predict_dataset, '', return_array=True)
+    cluster_predictions = cluster_model.predict(latent_features)
+    cluster_img = dp.reconstruct_cluster_image(...)
+    cluster_img = ut.pad_cluster_image(...)
+    m.display_reconstructed_and_cluster_images(...)
+\end{verbatim}
+
+\subsection*{Output}
+
+Each prediction run saves the following outputs in the \texttt{predictions\_path} folder:
+
+\begin{itemize}
+  \item \textbf{Cluster map:} A color-coded image showing predicted cluster labels for each image region.
+  \item \textbf{Overlay (optional):} A composite image showing the raw STM image overlaid with transparency or color labels.
+  \item \textbf{Reconstruction log:} Coordinate-based window reconstructions for reproducibility.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+%\includegraphics[width=0.45\textwidth]{figs/prediction_raw}
+\hspace{1em}
+%\includegraphics[width=0.45\textwidth]{figs/prediction_clusters}
+\caption{Cluster prediction output. (Left) reconstructed raw STM image. (Right) predicted cluster labels, highlighting nanoscale structure.}
+\end{figure}
+
+This concludes the SRSML24 processing pipeline: from raw data preprocessing, through autoencoder training and latent-space clustering, to visualization of predictions on new STM images.
+
 
 \end{document}
