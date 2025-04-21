@@ -263,4 +263,93 @@ This produces a trained autoencoder model along with detailed training logs and 
 \includegraphics[width=\textwidth]{figs/autoencoder_summary}
 \caption{Example UNET autoencoder model summary.}
 \end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=\textwidth]{figs/unet_history}
+\caption{Example plot of training history.}
+\end{figure}
+
+
+
+
+\section*{Step 3: Extracting Latent Features and Clustering}
+
+Once the autoencoder has been trained, the next step is to extract compressed latent representations from its encoder and apply clustering to identify recurring patterns in the STM image windows. This step uses memory-efficient TensorFlow pipelines and supports large-scale datasets by processing in batches and saving intermediate results to disk.
+
+\subsection*{Extracting Latent Features and Saving to Disk}
+
+The encoder is applied to the training dataset to compute latent vectors for each image window. These are saved to disk in a structured format using:
+
+\begin{verbatim}
+m.extract_latent_features_to_disk_from_prebatched_windows(
+    autoencoder_model, 
+    train_dataset, 
+    latent_features_path, 
+    features_name='latent_features_train',
+    return_array=False,
+    verbose=False)
+\end{verbatim}
+
+This function stores the latent features in \texttt{.npy} files under \texttt{latent\_features\_path}, with names beginning with \texttt{latent\_features\_train}. Saving in batches avoids memory bottlenecks. The saved latent features are later used for training a cluster model.
+
+\subsection*{Preparing the Latent Feature Dataset}
+
+The saved latent feature files are listed and loaded into a TensorFlow data pipeline, ready for clustering:
+
+\begin{verbatim}
+latent_features_files, num_latent_files = dp.list_files_by_extension(
+    latent_features_path, 'npy')
+
+latent_features_dataset = m.create_latent_features_tf_dataset(
+    latent_features_files,
+    batch_size=cluster_batch_size,
+    shuffle=True, 
+    shuffle_buffer_size=cluster_buffer_size)
+\end{verbatim}
+
+\subsection*{Clustering with MiniBatch KMeans}
+
+Clustering is performed using the MiniBatch KMeans algorithm, which is scalable to large datasets and performs incremental updates to the centroids:
+
+\begin{verbatim}
+cluster_model, convergence_history = m.train_kmeans(
+    latent_features_dataset,
+    batch_size=cluster_batch_size,
+    num_clusters=num_clusters,
+    n_init=n_init,
+    max_iter=max_iter,
+    reassignment_ratio=reassignment_ratio)
+\end{verbatim}
+
+The training history includes convergence diagnostics and can be plotted to assess stability across epochs.
+
+\subsection*{Saving the Clustering Model}
+
+The trained clustering model is saved using:
+
+\begin{verbatim}
+m.save_cluster_model(cluster_model, cluster_model_path, model_name=cluster_model_name)
+\end{verbatim}
+
+This ensures that cluster labels can be reused for prediction, visualization, or interpretation in downstream analysis.
+
+\subsection*{Outputs}
+
+This step produces the following key results:
+
+\begin{itemize}
+  \item \textbf{Latent feature vectors:} Encoded representations saved as batched \texttt{.npy} files.
+  \item \textbf{Trained KMeans model:} Saved clustering model for reuse or deployment.
+  \item \textbf{Convergence history:} Optional diagnostics on clustering stability and progress.
+\end{itemize}
+
+\begin{figure}[H]
+\centering
+%\includegraphics[width=0.85\textwidth]{figs/kmeans_clusters}
+\caption{Cluster assignments in latent space using MiniBatch KMeans. Each color represents a distinct pattern or feature set discovered from STM data.}
+\end{figure}
+
+
+
 \end{document}

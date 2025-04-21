@@ -599,27 +599,15 @@ def plot_history_from_file(file_path,
     plt.legend()
     plt.tight_layout()
 
-    # Show plot if requested
+    # Save before displaying or closing
+    out_path = os.path.splitext(file_path)[0] + '.jpg'
+    plt.savefig(out_path, format='jpg', dpi=dpi)
+
     if show_plot:
         plt.show()
 
-    # # Determine save path
-    # if output_dir:
-    #     os.makedirs(output_dir, exist_ok=True)
-    #     parts = [model_name, model_train_time, 'history']
-    #     base = '_'.join([p for p in parts if p]) + '.jpg'
-    #     out_path = os.path.join(output_dir, base)
-    # else:
-    #     out_path = os.path.splitext(file_path)[0] + '.jpg'
-
-    out_path = os.path.splitext(file_path)[0] + '.jpg'
-    plt.savefig(out_path, format='jpg', dpi=dpi)
     plt.close()
     return out_path
-
-
-
-
 
 # ============================================================================
 # Model testing
