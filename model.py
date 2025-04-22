@@ -1065,7 +1065,7 @@ def create_latent_features_tf_dataset(latent_feature_files, batch_size=32, shuff
 #     return data_pipeline
 
 
-def train_kmeans(data_pipeline, batch_size=2048, num_clusters=10, n_init=10, max_iter=300, reassignment_ratio=0.01):
+def train_kmeans(data_pipeline, batch_size=2048, num_clusters=10, n_init=1, max_iter=300, reassignment_ratio=0.01):
     """
     Trains a MiniBatchKMeans clustering model using latent feature data from a TensorFlow data pipeline.
     Adds optimizations for improved fitting in batch-based training, including a warm start with KMeans.
@@ -1107,7 +1107,7 @@ def train_kmeans(data_pipeline, batch_size=2048, num_clusters=10, n_init=10, max
     kmeans = MiniBatchKMeans(
         n_clusters=num_clusters,
         batch_size=batch_size,
-        n_init=n_init,
+        n_init=1,
         max_iter=max_iter,
         reassignment_ratio=reassignment_ratio,
         init=initial_kmeans.cluster_centers_
@@ -1127,8 +1127,8 @@ def train_kmeans(data_pipeline, batch_size=2048, num_clusters=10, n_init=10, max
         inertia = kmeans.inertia_
         convergence_history.append(inertia)
         print(f"Batch {i+1} processed. Inertia: {inertia}")
+        sys.stdout.flush()
 
-    print(f"Final inertia after training: {kmeans.inertia_}")
     return kmeans, convergence_history
 
 
