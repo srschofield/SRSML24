@@ -23,13 +23,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
 
-import io
-from contextlib import redirect_stdout
-
-
-import json
-import pickle
-
 import tensorflow as tf
 from tensorflow.keras import layers
 
@@ -39,8 +32,6 @@ from sklearn.cluster import MiniBatchKMeans
 from sklearn.metrics import silhouette_score
 from sklearn.decomposition import PCA
 import joblib # for saving cluster model
-
-from skimage.measure import label, regionprops
 
 # ============================================================================
 # System information
@@ -375,98 +366,115 @@ def build_autoencoder(window_size, model_name='autoencoder'):
     tf.random.set_seed(42)
 
     # Define the input shape
-    inputs = tf.keras.Input(shape=(window_size, window_size, 1), name='input')
+    inputs = tf.keras.Input(shape=(window_size, window_size, 1), name='Input_windows')
     
-    # Encoder
-    c1 = layers.Conv2D(32, 3, activation='relu', padding='same',
-                       kernel_initializer='he_normal', name='conv1')(inputs)
-    d1 = layers.Dropout(0.1, name='drop1')(c1)
-    p1 = layers.MaxPooling2D(pool_size=2, name='pool1')(d1)
+    # Encoder (Contracting Path)
+    c1 = layers.Conv2D(name='Convolutional_1',
+                       filters=32, 
+                       kernel_size=3, 
+                       activation='relu',
+                       padding='same',
+                       kernel_initializer='he_normal')(inputs)
     
-    c2 = layers.Conv2D(64, 3, activation='relu', padding='same',
-                       kernel_initializer='he_normal', name='conv2')(p1)
-    d2 = layers.Dropout(0.1, name='drop2')(c2)
-    p2 = layers.MaxPooling2D(pool_size=2, name='pool2')(d2)
+    d1 = layers.Dropout(0.1, name='Dropout_1')(c1)
     
-    c3 = layers.Conv2D(128, 3, activation='relu', padding='same',
-                       kernel_initializer='he_normal', name='conv3')(p2)
-    d3 = layers.Dropout(0.1, name='drop3')(c3)
-    p3 = layers.MaxPooling2D(pool_size=2, name='pool3')(d3)
+    p1 = layers.MaxPooling2D(name='MaxPooling_1', pool_size=2)(d1)  # (window_size / 2, window_size / 2, 32)
     
-    # Bottleneck
-    c4 = layers.Conv2D(256, 3, activation='relu', padding='same',
-                       kernel_initializer='he_normal', name='bottleneck')(p3)
+    c2 = layers.Conv2D(name='Convolutional_2',
+                       filters=64, 
+                       kernel_size=3, 
+                       activation='relu',
+                       padding='same',
+                       kernel_initializer='he_normal')(p1)
     
-    # Decoder
-    u1 = layers.UpSampling2D(size=2, name='up1')(c4)
-    u1 = layers.Conv2D(128, 3, activation='relu', padding='same',
-                       kernel_initializer='he_normal', name='upconv1')(u1)
-    u1 = layers.concatenate([u1, c3], axis=-1, name='skip1')
-    c5 = layers.Conv2D(128, 3, activation='relu', padding='same',
-                       kernel_initializer='he_normal', name='conv4')(u1)
+    d2 = layers.Dropout(0.1, name='Dropout_2')(c2)
     
-    u2 = layers.UpSampling2D(size=2, name='up2')(c5)
-    u2 = layers.Conv2D(64, 3, activation='relu', padding='same',
-                       kernel_initializer='he_normal', name='upconv2')(u2)
-    u2 = layers.concatenate([u2, c2], axis=-1, name='skip2')
-    c6 = layers.Conv2D(64, 3, activation='relu', padding='same',
-                       kernel_initializer='he_normal', name='conv5')(u2)
+    p2 = layers.MaxPooling2D(name='MaxPooling_2', pool_size=2)(d2)  # (window_size / 4, window_size / 4, 64)
     
-    u3 = layers.UpSampling2D(size=2, name='up3')(c6)
-    u3 = layers.Conv2D(32, 3, activation='relu', padding='same',
-                       kernel_initializer='he_normal', name='upconv3')(u3)
-    u3 = layers.concatenate([u3, c1], axis=-1, name='skip3')
-    c7 = layers.Conv2D(32, 3, activation='relu', padding='same',
-                       kernel_initializer='he_normal', name='conv6')(u3)
+    c3 = layers.Conv2D(name='Convolutional_3',
+                       filters=128, 
+                       kernel_size=3, 
+                       activation='relu',
+                       padding='same',
+                       kernel_initializer='he_normal')(p2)
     
-    outputs = layers.Conv2D(1, 1, activation='sigmoid', padding='same', name='output')(c7)
+    d3 = layers.Dropout(0.1, name='Dropout_3')(c3)
     
-    return tf.keras.Model(inputs=inputs, outputs=outputs, name=model_name)
-
-
-def save_model_summary(model, model_path, model_name):
-    os.makedirs(model_path, exist_ok=True)
-    parts = [model_name, 'model_summary']
-    file_base = '_'.join([p for p in parts if p])
-    file_name = f"{file_base}.txt"
-    file_path = os.path.join(model_path, file_name)
+    p3 = layers.MaxPooling2D(name='MaxPooling_3', pool_size=2)(d3)  # (window_size / 8, window_size / 8, 128)
     
-    with open(file_path, 'w') as f:
-        with redirect_stdout(f):
-            model.summary()
-
-def save_model_diagram(model, model_path, model_name='model',
-                       show_shapes=False, show_layer_names=False, expand_nested=False):
-    """
-    Saves a PNG diagram of the Keras model architecture using plot_model.
-    Falls back gracefully if pydot or Graphviz are not installed.
+    # Bottleneck (lowest point in the U)
+    c4 = layers.Conv2D(name='Bottleneck',
+                       filters=256, 
+                       kernel_size=3, 
+                       activation='relu',
+                       padding='same',
+                       kernel_initializer='he_normal')(p3)
     
-    Parameters:
-        model (tf.keras.Model): The model to visualize.
-        model_path (str): Directory to save the image.
-        model_name (str): Base name to use in the output filename.
-        show_shapes (bool): Whether to show output shapes on the diagram.
-        show_layer_names (bool): Whether to show layer names on the diagram.
-        expand_nested (bool): Whether to expand nested models (e.g. submodules).
-    """
-    try:
-        from tensorflow.keras.utils import plot_model
-        os.makedirs(model_path, exist_ok=True)
-        file_path = os.path.join(model_path, f"{model_name}_model_summary.png")
-        
-        plot_model(model,
-                   to_file=file_path,
-                   show_shapes=show_shapes,
-                   show_layer_names=show_layer_names,
-                   expand_nested=expand_nested)
-        
-        print(f"[Info] Model diagram saved to {file_path}")
-        
-    except (ImportError, OSError) as e:
-        print(f"[Warning] Could not generate model diagram. Reason: {e}")
-        print("To enable this feature, install:\n"
-              "  pip install pydot graphviz\n"
-              "  brew install graphviz  # or apt install graphviz")
+    # Decoder (Expansive Path)
+    u1 = layers.UpSampling2D(name='UpSampling_1', size=2)(c4)  # (window_size / 4, window_size / 4, 128)
+    u1 = layers.Conv2D(name='UpConv_1',
+                       filters=128, 
+                       kernel_size=3, 
+                       activation='relu',
+                       padding='same',
+                       kernel_initializer='he_normal')(u1)
+    
+    # Skip connection with c3
+    u1 = layers.concatenate([u1, c3], axis=-1, name='Skip_Connection_1')  # Match c3's dimensions
+    
+    c5 = layers.Conv2D(name='Convolutional_4',
+                       filters=128, 
+                       kernel_size=3, 
+                       activation='relu',
+                       padding='same',
+                       kernel_initializer='he_normal')(u1)
+    
+    u2 = layers.UpSampling2D(name='UpSampling_2', size=2)(c5)  # (window_size / 2, window_size / 2, 64)
+    u2 = layers.Conv2D(name='UpConv_2',
+                       filters=64, 
+                       kernel_size=3, 
+                       activation='relu',
+                       padding='same',
+                       kernel_initializer='he_normal')(u2)
+    
+    # Skip connection with c2
+    u2 = layers.concatenate([u2, c2], axis=-1, name='Skip_Connection_2')
+    
+    c6 = layers.Conv2D(name='Convolutional_5',
+                       filters=64, 
+                       kernel_size=3, 
+                       activation='relu',
+                       padding='same',
+                       kernel_initializer='he_normal')(u2)
+    
+    u3 = layers.UpSampling2D(name='UpSampling_3', size=2)(c6)  # (window_size, window_size, 32)
+    u3 = layers.Conv2D(name='UpConv_3',
+                       filters=32, 
+                       kernel_size=3, 
+                       activation='relu',
+                       padding='same',
+                       kernel_initializer='he_normal')(u3)
+    
+    # Skip connection with c1
+    u3 = layers.concatenate([u3, c1], axis=-1, name='Skip_Connection_3')
+    
+    c7 = layers.Conv2D(name='Convolutional_6',
+                       filters=32, 
+                       kernel_size=3, 
+                       activation='relu',
+                       padding='same',
+                       kernel_initializer='he_normal')(u3)
+    
+    outputs = layers.Conv2D(name='Output',
+                            filters=1, 
+                            kernel_size=1, 
+                            activation='sigmoid',  # Change to 'linear' if the task requires it
+                            padding='same')(c7)
+    
+    # Define the U-Net model with the specified name
+    model = tf.keras.Model(inputs=inputs, outputs=outputs, name=model_name)
+    
+    return model
 
 
 
@@ -474,142 +482,90 @@ def save_model_diagram(model, model_path, model_name='model',
 # Model training information
 # ============================================================================
 
-def save_history(history, model_name, model_path, model_train_time=''):
+def plot_training_history(history, 
+                          loss_name='loss', 
+                          val_loss_name='val_loss', 
+                          metric_names=['mse', 'mae'], 
+                          val_metric_names=['val_mse', 'val_mae'],
+                          save_to_disk=False,
+                          model_name='', 
+                          model_train_time='',
+                          output_path=None,
+                          dpi=150):
     """
-    Saves the Keras History or a history-like dict to disk as a .dat (pickle) file.
-    Filename: '{model_name}_{model_train_time}_history_data.dat', omitting empty parts.
-
+    Plots the training and validation loss and metrics from the history object returned by model.fit().
+    
     Parameters:
-    -----------
-    history: History object or dict
-        If a Keras History, its `.history` attribute will be used. If it's already a dict,
-        it will be saved directly.
-    model_name: str
-        Identifier for the model, used in the filename.
-    model_path: str
-        Directory where the file will be saved.
-    model_train_time: str, optional
-        Timestamp or descriptor to include in the filename.
-
-    Returns:
-    --------
-    str: The full path to the saved .dat file.
+    history: History object
+        The history object returned by the model.fit() function.
+    loss_name: str, optional
+        The name of the loss key in the history object. Default is 'loss'.
+    val_loss_name: str, optional
+        The name of the validation loss key in the history object. Default is 'val_loss'.
+    metric_names: list of str, optional
+        The names of the training metric keys in the history object. Default is ['mse', 'mae'].
+    val_metric_names: list of str, optional
+        The names of the validation metric keys in the history object. Default is ['val_mse', 'val_mae'].
+    save_to_disk: bool, optional
+        If True, saves the plot to disk instead of displaying it on screen. Default is False.
+    output_path: str, optional
+        The path to save the plot if save_to_disk is True. Must be specified if save_to_disk is True.
     """
-    # Extract raw data dict
-    data = history.history if hasattr(history, 'history') else history
-    # Ensure directory exists
-    os.makedirs(model_path, exist_ok=True)
-    # Build filename parts, skipping empty
-    parts = [model_name, model_train_time, 'history_data']
-    file_base = '_'.join([p for p in parts if p])
-    file_name = f"{file_base}.dat"
-    file_path = os.path.join(model_path, file_name)
-    # Save via pickle
-    with open(file_path, 'wb') as f:
-        pickle.dump(data, f)
-    # Notify user
-    print(f"The training history data has been saved to disk as a binary pickle file in: {file_path}")
-    return file_path
-
-
-def plot_history_from_file(file_path,
-                           loss_name='loss',
-                           val_loss_name='val_loss',
-                           metric_names=None,
-                           val_metric_names=None,
-                           dpi=150,
-                           show_plot=True):
-    """
-    Loads training history from a .dat (pickle) or .json file and plots loss and metrics,
-    optionally showing and saving the figure as a JPG.
-
-    Parameters:
-    -----------
-    file_path: str
-        Path to the history file (.dat or .json).
-    loss_name: str
-        Key for training loss. Default 'loss'.
-    val_loss_name: str
-        Key for validation loss. Default 'val_loss'.
-    metric_names: list of str
-        Training metric keys. Defaults to ['mse', 'mae'] if None.
-    val_metric_names: list of str
-        Validation metric keys. Defaults to ['val_mse', 'val_mae'] if None.
-    model_name: str
-        Optional identifier for output filename.
-    model_train_time: str
-        Optional timestamp for output filename.
-    output_dir: str
-        Directory to save the plot JPG. If None, saves next to history file.
-    dpi: int
-        Resolution for saved figure.
-    show_plot: bool
-        If True, calls plt.show() to display the figure.
-
-    Returns:
-    --------
-    str: Path where the plot was saved.
-    """
-    # Load history
-    _, ext = os.path.splitext(file_path)
-    if ext.lower() == '.dat':
-        with open(file_path, 'rb') as f:
-            history = pickle.load(f)
-    elif ext.lower() == '.json':
-        with open(file_path, 'r') as f:
-            history = json.load(f)
-    else:
-        raise ValueError(f"Unsupported extension: {ext}")
-
-    # Defaults
-    if metric_names is None:
-        metric_names = ['mse', 'mae']
-    if val_metric_names is None:
-        val_metric_names = ['val_mse', 'val_mae']
-
-    # Extract data series
-    loss = history.get(loss_name)
-    val_loss = history.get(val_loss_name)
-    metrics = {m: history.get(m) for m in metric_names}
-    val_metrics = {vm: history.get(vm) for vm in val_metric_names}
+    # Extract values from history
+    loss = history.history.get(loss_name, None)
+    val_loss = history.history.get(val_loss_name, None)
+    
+    # Extract metrics
+    metrics = {metric: history.history.get(metric, None) for metric in metric_names}
+    val_metrics = {val_metric: history.history.get(val_metric, None) for val_metric in val_metric_names}
+    
     epochs = range(1, len(loss) + 1) if loss else []
-
-    # Plot
+    
     plt.figure(figsize=(12, 5))
-    # Loss subplot
+    
+    # Plot Loss
     if loss and val_loss:
         plt.subplot(1, 2, 1)
         plt.plot(epochs, loss, label='Training Loss')
         plt.plot(epochs, val_loss, label='Validation Loss')
         plt.title('Loss over Epochs')
-        plt.xlabel('Epoch')
+        plt.xlabel('Epochs')
         plt.ylabel('Loss')
         plt.legend()
     else:
-        print("Warning: Missing loss or val_loss in history.")
-    # Metrics subplot
-    plt.subplot(1, 2, 2)
-    for m, vm in zip(metric_names, val_metric_names):
-        tr = metrics.get(m)
-        vl = val_metrics.get(vm)
-        if tr and vl:
-            plt.plot(epochs, tr, label=f'Train {m}')
-            plt.plot(epochs, vl, linestyle='--', label=f'Val {m}')
-    plt.title('Metrics over Epochs')
-    plt.xlabel('Epoch')
-    plt.ylabel('Value')
-    plt.legend()
+        print("Loss data is not available in the provided history object.")
+    
+    # Plot Metrics
+    if metrics and val_metrics:
+        plt.subplot(1, 2, 2)
+        for metric, val_metric in zip(metric_names, val_metric_names):
+            if metrics[metric] is not None and val_metrics[val_metric] is not None:
+                plt.plot(epochs, metrics[metric], label=f'Training {metric}')
+                plt.plot(epochs, val_metrics[val_metric], label=f'Validation {val_metric}', linestyle='dashed')
+        plt.title('Metrics over Epochs')
+        plt.xlabel('Epochs')
+        plt.ylabel('Metric Value')
+        plt.legend()
+    else:
+        print("Metric data is not available in the provided history object.")
+    
     plt.tight_layout()
-
-    # Save before displaying or closing
-    out_path = os.path.splitext(file_path)[0] + '.jpg'
-    plt.savefig(out_path, format='jpg', dpi=dpi)
-
-    if show_plot:
+    
+    # Display or save the plot
+    if save_to_disk:
+        if output_path:
+            if model_train_time != '':
+                output_path = output_path + '/' + model_name+'_' + model_train_time + '_history.jpg'
+            else: 
+                output_path = output_path + '/' + model_name+'_history.jpg'
+            plt.savefig(output_path, format='jpg', dpi=dpi)
+            print(f"Plot saved to {output_path}")
+        else:
+            print("Error: output_path must be specified when save_to_disk is True.")
+    else:
         plt.show()
 
-    plt.close()
-    return out_path
+
 
 # ============================================================================
 # Model testing
@@ -645,7 +601,7 @@ def visualize_reconstruction(model, test_image):
 
 
 def display_reconstructed_and_cluster_images(reconstructed_img, cluster_img, show_overlay=True, 
-                                             save_to_disk=False, output_path=None, image_name='img', dpi=150):
+                                             save_to_disk=False, output_path=None, predictions_time_stamp='', image_name='img', dpi=150):
     """
     Display side-by-side images: the reconstructed input image, the cluster labels,
     and optionally an overlay of the reconstructed image with cluster labels on top.
@@ -665,10 +621,13 @@ def display_reconstructed_and_cluster_images(reconstructed_img, cluster_img, sho
     - None: This function either displays the plot or saves it to disk based on save_to_disk.
     """
 
+    
+
     # Output directory with timestamp
-    if not os.path.exists(output_path):
-        os.makedirs(output_path)
-        print(f"Directory created: {output_path}")
+    predictions_path = os.path.join(output_path, f'predictions/{predictions_time_stamp}')
+    if not os.path.exists(predictions_path):
+        os.makedirs(predictions_path)
+        print(f"Directory created: {predictions_path}")
 
     # Determine the number of subplots based on show_overlay
     n_plots = 3 if show_overlay else 2
@@ -685,16 +644,18 @@ def display_reconstructed_and_cluster_images(reconstructed_img, cluster_img, sho
     ax[1].axis('off')  # Remove axis labels
 
     # Optionally plot the third image (Overlay of Reconstructed Image with Cluster Labels)
-
     if show_overlay:
-        overlay_cluster_with_alpha(ax[2], reconstructed_img, cluster_img)
+        ax[2].imshow(reconstructed_img, cmap='viridis')
+        ax[2].imshow(cluster_img, cmap='turbo', alpha=0.6)  # Overlay with transparency
+        ax[2].set_title('Overlayed Image with Cluster Labels')
+        ax[2].axis('off')  # Remove axis labels
 
     plt.tight_layout()
     
     # Save to disk or display
     if save_to_disk:
         if output_path:
-            output_path = os.path.join(output_path, f"{image_name}.jpg")
+            output_path = os.path.join(predictions_path, f"{image_name}.jpg")
             plt.savefig(output_path, format='jpg', dpi=dpi)
             print(f"Image saved to {output_path} with dpi={dpi}")
         else:
@@ -706,57 +667,7 @@ def display_reconstructed_and_cluster_images(reconstructed_img, cluster_img, sho
     plt.close(fig)
 
 
-def overlay_cluster_with_alpha(ax, reconstructed_img, cluster_img, overlay_cmap='turbo', alpha=0.6):
-    ax.imshow(reconstructed_img, cmap='gray')  # or 'viridis'
-    ax.imshow(cluster_img, cmap=overlay_cmap, alpha=alpha)  # no transparency logic
-    ax.set_title("Overlayed Image with Cluster Labels")
-    ax.axis('off')
 
-def analyse_cluster_labels(cluster_image, large_region_thresh=0.1):
-    label_stats = {}
-    background_labels = []
-
-    image_area = cluster_image.shape[0] * cluster_image.shape[1]
-
-    for cluster_id in np.unique(cluster_image):
-        mask = (cluster_image == cluster_id)
-        labeled_mask = label(mask)
-        regions = regionprops(labeled_mask)
-
-        region_sizes = [r.area for r in regions]
-        total_area = np.sum(mask)
-        max_region_size = max(region_sizes) if region_sizes else 0
-        is_background = max_region_size > large_region_thresh * image_area
-
-        label_stats[cluster_id] = {
-            'total_area': total_area,
-            'percent_area': 100 * total_area / image_area,
-            'num_regions': len(region_sizes),
-            'mean_region_size': np.mean(region_sizes) if region_sizes else 0,
-            'max_region_size': max_region_size,
-            'max_region_percent': 100 * max_region_size / image_area,
-            'is_background': is_background,
-        }
-
-        if is_background:
-            background_labels.append(cluster_id)
-
-    return label_stats, background_labels
-
-
-def relabel_background(cluster_img, background_labels):
-    # Create a copy to avoid modifying the original
-    new_img = np.copy(cluster_img)
-
-    # Set all background label pixels to -1
-    for bg_label in background_labels:
-        new_img[cluster_img == bg_label] = -1
-
-    # Shift non-background labels by +1
-    mask_non_background = new_img >= 0
-    new_img[mask_non_background] += 1
-
-    return new_img
 
 # ============================================================================
 # Clustering
@@ -848,7 +759,7 @@ def extract_latent_features_to_disk_from_prebatched_windows(
     autoencoder_model,
     dataset,
     features_path,
-    bottleneck_layer_name='bottleneck',
+    bottleneck_layer_name='Bottleneck',
     features_name='latent_features',
     return_array=False,
     verbose=False):
@@ -1115,7 +1026,7 @@ def create_latent_features_tf_dataset(latent_feature_files, batch_size=32, shuff
 #     return data_pipeline
 
 
-def train_kmeans(data_pipeline, batch_size=2048, num_clusters=10, n_init=1, max_iter=300, reassignment_ratio=0.01):
+def train_kmeans(data_pipeline, batch_size=2048, num_clusters=10, n_init=10, max_iter=300, reassignment_ratio=0.01):
     """
     Trains a MiniBatchKMeans clustering model using latent feature data from a TensorFlow data pipeline.
     Adds optimizations for improved fitting in batch-based training, including a warm start with KMeans.
@@ -1157,7 +1068,7 @@ def train_kmeans(data_pipeline, batch_size=2048, num_clusters=10, n_init=1, max_
     kmeans = MiniBatchKMeans(
         n_clusters=num_clusters,
         batch_size=batch_size,
-        n_init=1,
+        n_init=n_init,
         max_iter=max_iter,
         reassignment_ratio=reassignment_ratio,
         init=initial_kmeans.cluster_centers_
@@ -1177,57 +1088,10 @@ def train_kmeans(data_pipeline, batch_size=2048, num_clusters=10, n_init=1, max_
         inertia = kmeans.inertia_
         convergence_history.append(inertia)
         print(f"Batch {i+1} processed. Inertia: {inertia}")
-        sys.stdout.flush()
 
+    print(f"Final inertia after training: {kmeans.inertia_}")
     return kmeans, convergence_history
 
-
-def plot_kmeans_convergence(convergence_history, cluster_model_path, model_name, dpi=150):
-    """
-    Plots MiniBatchKMeans convergence over batches, excluding the final point
-    which may correspond to a smaller, less representative batch. Saves both
-    the plot and the raw inertia values (as plain text).
-
-    Parameters:
-        convergence_history (list): Inertia values recorded per batch.
-        cluster_model_path (str): Directory to save output files.
-        model_name (str): Base name for saved files.
-        dpi (int): Dots per inch for saved figure.
-    """
-    if len(convergence_history) <= 1:
-        print("[Warning] Not enough data to plot convergence.")
-        return
-
-    # Exclude final point
-    history_to_plot = convergence_history[:-1]
-
-    # Ensure output directory exists
-    os.makedirs(cluster_model_path, exist_ok=True)
-
-    # Define save paths
-    image_path = os.path.join(cluster_model_path, f"{model_name}_convergence.jpg")
-    txt_path = os.path.join(cluster_model_path, f"{model_name}_convergence.txt")
-
-    # Save raw inertia values as plain text (one per line)
-    with open(txt_path, 'w') as f:
-        for val in history_to_plot:
-            f.write(f"{val}\n")
-    print(f"[Info] Raw convergence data saved to {txt_path}")
-
-    # Plot
-    plt.figure(figsize=(8, 5))
-    epochs = list(range(1, len(history_to_plot) + 1))
-    plt.plot(epochs, history_to_plot, marker='o', linewidth=1.5)
-    plt.title("MiniBatchKMeans Convergence")
-    plt.xlabel("Batch Index")
-    plt.ylabel("Inertia")
-    plt.grid(True)
-    plt.tight_layout()
-
-    # Save plot
-    plt.savefig(image_path, dpi=dpi)
-    print(f"[Info] Convergence plot saved to {image_path}")
-    plt.show()
 
 
 def evaluate_and_visualize_clustering(latent_features, cluster_labels):
