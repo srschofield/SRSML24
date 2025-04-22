@@ -353,31 +353,11 @@ This step produces the following key results:
 
 \section*{Step 4: Making Cluster Predictions on New STM Images}
 
-In the final step, trained models are applied to new STM image data. This allows the latent features learned by the autoencoder, and the clustering patterns identified via KMeans, to be mapped onto previously unseen scans—highlighting recurring patterns, regions of interest, or anomalies.
+In the final step, trained models are applied to new STM image data. This allows the latent features learned by the autoencoder, and the clustering patterns identified via KMeans, to be mapped onto previously unseen scans, highlighting recurring patterns, regions of interest, or anomalies.
 
 \subsection*{Preparing Prediction Data}
 
-STM images in the Scienta Omicron MATRIX format are first preprocessed into windowed image data using the same function as in Step 1:
-
-\begin{verbatim}
-dp.process_mtrx_files(
-    mtrx_predict_file_list,
-    job_data_path,
-    flatten_method = flatten_method,
-    pixel_density = pixel_density,
-    pixel_ratio = pixel_ratio,
-    data_scaling = data_scaling,
-    window_size = window_size, 
-    window_pitch = predict_window_pitch,
-    save_windows = save_windows,
-    save_window_jpgs = save_window_jpgs,
-    save_jpg = save_jpg,
-    together = together,
-    collate = collate,
-    verbose = verbose)
-\end{verbatim}
-
-The windows and coordinate files are saved in the same structure as the training set, enabling seamless integration with the trained models.
+STM images in the Scienta Omicron MATRIX format are first preprocessed into windowed image data using the same function as in Step 1 using \texttt{dp.process\_mtrx\_files}. This produces a set of windowed data on disk. 
 
 \subsection*{Loading Trained Models}
 

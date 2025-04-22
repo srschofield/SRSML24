@@ -798,7 +798,7 @@ def extract_latent_features_to_disk_from_prebatched_windows(
     autoencoder_model,
     dataset,
     features_path,
-    bottleneck_layer_name='Bottleneck',
+    bottleneck_layer_name='bottleneck',
     features_name='latent_features',
     return_array=False,
     verbose=False):
