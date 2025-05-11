@@ -373,29 +373,15 @@ cluster_model = m.load_cluster_model(cluster_model_path, model_name=cluster_mode
 For each preprocessed STM image:
 
 \begin{enumerate}
-  \item \textbf{Window data and coordinates} are loaded from disk.
+  \item Window data and coordinates are loaded from disk.
   \item A full image is reconstructed from the original window tiles.
   \item A TensorFlow data pipeline is built to pass the windows through the autoencoder.
   \item The autoencoder encoder generates latent features for each window.
   \item The clustering model assigns each window to a cluster.
   \item Cluster labels are mapped back to image coordinates and rendered as a cluster map.
-  \item The result is optionally padded to match the original image dimensions.
+  \item The result is padded to match the original image dimensions.
   \item A side-by-side visualization of the raw and clustered image is saved to disk.
 \end{enumerate}
-
-This workflow is handled in the following loop:
-
-\begin{verbatim}
-for prediction_file, coords_file in zip(predict_data_files_list, image_windows_coordinates_file_list):
-    ...
-    predict_dataset = m.create_tf_dataset_batched(...)
-    latent_features = m.extract_latent_features_to_disk_from_prebatched_windows(
-        autoencoder_model, predict_dataset, '', return_array=True)
-    cluster_predictions = cluster_model.predict(latent_features)
-    cluster_img = dp.reconstruct_cluster_image(...)
-    cluster_img = ut.pad_cluster_image(...)
-    m.display_reconstructed_and_cluster_images(...)
-\end{verbatim}
 
 \subsection*{Output}
 
@@ -414,8 +400,5 @@ Each prediction run saves the following outputs in the \texttt{predictions\_path
 %\includegraphics[width=0.45\textwidth]{figs/prediction_clusters}
 \caption{Cluster prediction output. (Left) reconstructed raw STM image. (Right) predicted cluster labels, highlighting nanoscale structure.}
 \end{figure}
-
-This concludes the SRSML24 processing pipeline: from raw data preprocessing, through autoencoder training and latent-space clustering, to visualization of predictions on new STM images.
-
 
 \end{document}
