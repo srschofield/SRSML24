@@ -1,5 +1,6 @@
 #!/bin/bash -f
 
+#$ -q I_40T_64G_NVIDIA_TeslaT4_16G.q -l hostname=m041 
 #$ -N jn                         # Job name: 'jn'
 #$ -l h_rt=72:00:00              # Set wall-clock time limit 
 #$ -l vf=32G                     # Memory limit per slot
