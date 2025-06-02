@@ -9,6 +9,8 @@ while [ ! -f "jn_server.log" ]; do
     sleep 1  # Check every second
 done
 
+sleep 5
+
 # Output the contents of jn_server.log to the screen
 cat jn_server.log
 
