@@ -1,13 +1,9 @@
 #!/bin/bash -f
 
-#$ -N cluster               # Job name
-#$ -o cluster.log           # Output log file name
+#$ -N BIG_model              # Job name
+#$ -o BIG_model.log           # Output log file name
 #$ -l h_rt=168:00:00              # Set wall-clock time limit 
 #$ -l vf=64G                     # Memory limit per slot
-# #$ -pe ompi-local 40           # Request NUM CPU slots for parallel environment 'ompi-local'
-# #$ -M s.schofield@ucl.ac.uk    # Email address for job notifications
-# #$ -m bea                      # Email notifications on (b)egin, (e)nd, and (a)bort
-# #$ -V                            # Export all environment variables to the job
 #$ -cwd                          # Use the current working directory
 #$ -j y                          # Join standard error and output logs
 #$ -S /bin/bash                  # Use bash shell for the job script
@@ -38,6 +34,6 @@ echo "Memory requested per slot: 64G"
 
 # Start Jupyter notebook
 echo "Starting Python Script..."
-python cluster.py
+python BIG_model.py
 
 exit 0
