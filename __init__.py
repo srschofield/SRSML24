@@ -24,4 +24,5 @@ Modules:
 
 from . import data_prep
 from . import model
+from . import utils
 
