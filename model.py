@@ -42,6 +42,14 @@ import joblib # for saving cluster model
 
 from skimage.measure import label, regionprops
 
+# Adam dependencies
+import scipy 
+import skimage as ski
+from skimage import morphology, measure
+
+import SRSML24.utils as ut
+import SRSML24.data_prep as dp
+
 # ============================================================================
 # System information
 # ============================================================================
@@ -1375,3 +1383,200 @@ def load_latent_features(features_path, features_name='latent_features'):
     latent_features = np.concatenate(latent_features_list, axis=0)
     print(f"Latent features loaded from: {features_file_path}")
     return latent_features
+
+
+# ============================================================================
+# Adam Functions
+# ============================================================================
+
+def reconstruct_predict(prediction_file, coords_file, autoencoder_model, cluster_model, window_size, predictions_batch_size):
+    """
+    Reconstructs an image and its cluster predictions from a prediction file and coordinates file.
+    
+    Returns: reconstructed_img, cluster_img
+    """
+    # Load the windows for the image as a numpy file
+    image_windows = np.load(prediction_file)
+    # Load the image window coordinates
+    image_windows_coordinates = dp.load_coordinates_file(coords_file)
+    # Reconstruct the original image from the loaded image windows
+    reconstructed_img = dp.reconstruct_image(image_windows,image_windows_coordinates,window_size)
+
+    # Make a tensorflow data pipeline of just the image windows for this image.
+    num_windows = image_windows.shape[0]
+    print('\n---\nProcessing file {}'.format(os.path.basename(prediction_file)))
+
+    # Predictions windows
+    predict_dataset = create_tf_dataset_batched(
+        [prediction_file], 
+        batch_size=predictions_batch_size, 
+        window_size=window_size,
+        is_autoencoder=False, 
+        shuffle=False)
+
+    # make the latent features for each window using the autoencoder model 
+    latent_predict_features, num_latent_predictions = extract_latent_features_to_disk_from_prebatched_windows(
+        autoencoder_model, 
+        predict_dataset, 
+        '',                 # we are not saving these predictions to disk so don't need a folder or name
+        features_name='',
+        return_array=True,
+        verbose=False)
+
+    # make preductions 
+    cluster_predictions = cluster_model.predict(latent_predict_features)
+
+    # Build the reconstruction of the predicted cluster label data
+    cluster_img = dp.reconstruct_cluster_image(image_windows_coordinates,window_size, cluster_predictions)
+
+    # Pad the cluster image to the original image size
+    cluster_img = ut.padded_cluster_img = ut.pad_cluster_image(reconstructed_img,cluster_img,window_size)
+    
+    return reconstructed_img, cluster_img
+
+def remove_small_objects(ar, min_size=7,out=None):
+    """
+    Remove small objects from a binary array.
+    
+    Parameters:
+    - ar: Input binary array.
+    - min_size: Minimum size of objects to keep.
+    
+    
+    Returns:
+    - Binary array with small objects removed.
+    """
+    if out is None:
+        out = ar.copy()
+    else:
+        out[:] = ar
+    ccs = out
+    component_sizes = np.bincount(ccs.ravel())
+    too_small = component_sizes < min_size
+    too_small_mask = too_small[ccs]
+    out[too_small_mask] = 0
+    
+    
+    return out
+
+def remove_large_objects(ar, max_size=5000, out=None):
+    """
+    Remove large objects from a binary array.
+    
+    Parameters:
+    - ar: Input binary array.
+    - max_size: Maximum size of objects to keep.
+    
+    
+    Returns:
+    - Binary array with large objects removed.
+    """
+    if out is None:
+        out = ar.copy()
+    else:
+        out[:] = ar
+    ccs = out
+    component_sizes = np.bincount(ccs.ravel())
+    too_large = component_sizes > max_size
+    too_large_mask = too_large[ccs]
+    out[too_large_mask] = 0
+    
+    return out
+
+def detect_features_find_centres(cluster_img, max_size=20000, area_threshold=10,):
+    data_postprocess = cluster_img.astype("int")  # Convert to boolean type for morphological operations
+
+    #remove background
+    large_removed = remove_large_objects(data_postprocess, max_size=max_size)
+    #small_removed = remove_small_objects(large_removed, min_size=1000)  # Remove small objects with a minimum size of 100 pixels
+
+
+    area_closed = morphology.area_closing(large_removed, area_threshold=area_threshold)  # Apply closing operation to fill small holes
+    area_opened = morphology.area_opening(area_closed, area_threshold=area_threshold)  # Apply opening operation to remove small objects
+    #eroded = morphology.erosion(area_opened, morphology.disk(4))  # Apply opening operation to remove small objects
+
+
+    foreground = area_opened > 0  # Convert to boolean type for morphological operations
+    #Perform connected component labeling
+    #labeled_array, num_features = ski.measure.label(foreground, return_num=True, connectivity=2)  # Use connectivity=2 for 8-connectivity
+
+    labeled_array, num_features = scipy.ndimage.label(foreground)  # Use a 3x3 structure for connectivity
+
+    #connect_labels = ski.measure.label(labeled_array, connectivity=2)  # Use connectivity=2 for 8-connectivity
+    centers = scipy.ndimage.center_of_mass(foreground, labeled_array, range(1, num_features + 1))
+    centers = np.array(centers)  # Convert to numpy array for easier manipulation
+
+    #centers = [list(region.centroid) for region in regions]
+    #centers = np.array(centers)  # Transpose to get x and y coordinates
+
+    #features = large_removed
+    features = labeled_array
+    return features, centers, labeled_array, num_features
+
+def display_reconstructed_and_cluster_images_and_extracted_features(reconstructed_img, cluster_img, features_img, centers, 
+                                             save_to_disk=False, output_path=None, image_name='img', dpi=150):
+    """
+    Display side-by-side images: the reconstructed input image, the cluster labels,
+    and the highlighted features.
+
+    Parameters:
+    - reconstructed_img (ndarray): The reconstructed image, typically the output
+      from an autoencoder or similar model.
+    - cluster_img (ndarray): The image showing cluster labels, usually resulting
+      from clustering analysis on the latent space.
+    - features_img (ndarray): The image showing highlighted features, such as
+      detected regions or points of interest.
+    - centers (list): List of coordinates for the centers of detected features.
+    #- show_overlay (bool): Optional; if True, displays a third panel with an overlay
+    #  of the reconstructed image and cluster labels. Default is True.
+    - save_to_disk (bool): Optional; if True, saves the image to disk instead of displaying it. Default is False.
+    - output_path (str): The path to save the image if save_to_disk is True. Required if save_to_disk is True.
+    - dpi (int): Optional; the resolution in dots per inch for saving the image. Default is 300.
+
+    Returns:
+    - None: This function either displays the plot or saves it to disk based on save_to_disk.
+    """
+    # Output directory with timestamp
+    if save_to_disk:
+      if not os.path.exists(output_path):
+        os.makedirs(output_path)
+        print(f"Directory created: {output_path}")
+        
+    n_plots = 3  # Number of plots to display
+    fig, ax = plt.subplots(1, n_plots, figsize=(6 * n_plots, 6))
+    
+    # Plot the first image (Reconstructed Image)
+    ax[0].imshow(reconstructed_img, cmap='viridis')
+    ax[0].set_title('Input Image')
+    ax[0].axis('off')  # Remove axis labels
+
+    # Plot the second image (Cluster Labels)
+    ax[1].imshow(cluster_img, cmap='viridis', interpolation='nearest')
+    ax[1].set_title('Cluster Labels')
+    ax[1].axis('off')  # Remove axis labels
+    
+    ax[2].imshow(features_img, cmap='viridis', interpolation='nearest')
+    
+    ax[2].set_title('Detected Features')
+    ax[2].axis('off')  # Remove axis labels
+    
+    if len(centers) > 0:
+      ax[0].scatter(centers[:, 1], centers[:, 0], color='red', s=5)  # Highlight the centers of detected features
+      ax[1].scatter(centers[:, 1], centers[:, 0], color='red', s=5)  # Highlight the centers of detected features
+      ax[2].scatter(centers[:, 1], centers[:, 0], color='red', s=5)  # Highlight the centers of detected features
+        
+    plt.tight_layout()
+    
+    # Save to disk or display
+    if save_to_disk:
+        if output_path:
+            output_path = os.path.join(output_path, f"{image_name}.jpg")
+            plt.savefig(output_path, format='jpg', dpi=dpi)
+            print(f"Image saved to {output_path} with dpi={dpi}")
+        else:
+            print("Error: output_path must be specified when save_to_disk is True.")
+    else:
+        plt.show()
+
+    # Close the figure to release memory
+    plt.close(fig)
