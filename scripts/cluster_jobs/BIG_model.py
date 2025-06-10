@@ -23,7 +23,7 @@ import sys
 # Define candidate paths
 module_path_list = [
     '/Users/steven/academic-iCloud/Python/modules',
-    '/hpc/aklicka/Python/modules/'
+    '/hpc/aklicka/Python/modules'
 ]
 
 data_path_list = [
@@ -118,7 +118,7 @@ model_name = 'unet_' + job_name
 batch_size = 128
 buffer_size = 12800 # shuffling
 learning_rate = 1e-4
-epochs = 5
+epochs = 10
 
 # Parameters for clustering
 cluster_model_name = model_name + '_kmeans'

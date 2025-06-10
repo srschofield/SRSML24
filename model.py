@@ -46,6 +46,7 @@ from skimage.measure import label, regionprops
 import scipy 
 import skimage as ski
 from skimage import morphology, measure
+from skimage import segmentation
 
 import SRSML24.utils as ut
 import SRSML24.data_prep as dp
@@ -1513,6 +1514,39 @@ def detect_features_find_centres(cluster_img, max_size=20000, area_threshold=10,
     features = labeled_array
     return features, centers, labeled_array, num_features
 
+def detect_features_better(cluster_img, max_size=3000, area_threshold=10):
+    area_threshold = 20  # Define the area threshold for morphological operations
+    data = cluster_img.astype("int32")
+    boundaries = segmentation.find_boundaries(data, mode="outer")
+
+    # Create a copy to work with
+    boundary_image = boundaries.astype(int)
+
+    # Label connected components (regions between boundaries)
+    labeled_regions, num_regions = scipy.ndimage.label(~boundaries)
+
+    # Calculate area of each region
+    areas = {}
+    for region_id in range(1, num_regions + 1):
+        area = np.sum(labeled_regions == region_id)
+        areas[region_id] = area
+        
+    large_removed = remove_large_objects(labeled_regions, max_size=max_size)
+
+    area_closed = morphology.area_closing(large_removed, area_threshold=area_threshold)  # Apply closing operation to fill small holes
+    area_opened = morphology.area_opening(area_closed, area_threshold=area_threshold)  # Apply opening operation to remove small objects
+
+    foreground = area_opened > 0  # Convert to boolean type for morphological operations
+    dilated = morphology.binary_dilation(foreground, morphology.disk(1))  # Dilate the foreground to connect nearby features
+    labeled_array, num_features = scipy.ndimage.label(dilated)  # Use a 3x3 structure for connectivity
+
+    centers = scipy.ndimage.center_of_mass(foreground, labeled_array, range(1, num_features + 1))
+    centers = np.array(centers)  # Convert to numpy array for easier manipulation
+
+
+    
+    return labeled_array, centers, num_features
+
 def display_reconstructed_and_cluster_images_and_extracted_features(reconstructed_img, cluster_img, features_img, centers, 
                                              save_to_disk=False, output_path=None, image_name='img', dpi=150):
     """
@@ -1561,7 +1595,7 @@ def display_reconstructed_and_cluster_images_and_extracted_features(reconstructe
     ax[2].axis('off')  # Remove axis labels
     
     if len(centers) > 0:
-      ax[0].scatter(centers[:, 1], centers[:, 0], color='red', s=5)  # Highlight the centers of detected features
+      ax[0].scatter(centers[:, 1], centers[:, 0], color='red', s=5, alpha=0.5)  # Highlight the centers of detected features
       ax[1].scatter(centers[:, 1], centers[:, 0], color='red', s=5)  # Highlight the centers of detected features
       ax[2].scatter(centers[:, 1], centers[:, 0], color='red', s=5)  # Highlight the centers of detected features
         
@@ -1580,3 +1614,103 @@ def display_reconstructed_and_cluster_images_and_extracted_features(reconstructe
 
     # Close the figure to release memory
     plt.close(fig)
+
+
+def extract_feature_windows(image, centers, px=128):
+
+    
+    #print('EXTRRACTING WINDOWS. ORIG IMAGE: Height {} Width {}'.format(height, width))
+    height, width = image.shape
+
+
+    # Extract windows and record coordinates
+    windows = np.zeros((len(centers), px * 2, px * 2), dtype=image.dtype)  # Initialize windows array
+    centers = np.round(centers).astype(int)  # Ensure centers are integers for indexing
+    px = int(px)  # Ensure px is an integer for indexing
+    for i in range(len(centers)):
+        y = centers[i, 0]
+        x = centers[i, 1]
+            
+        # Adjust start positions to ensure full windows at the edges
+        if y + px > height:
+            y = height - px
+        if x + px > width:
+            x = width - px
+        if y - px < 0:
+            y = px
+        if x - px < 0:
+            x = px
+
+        # Extract windows with consistent size
+        window = image[y-px:y+px, x-px:x+px]
+        windows[i, :, :] = window
+
+        # if window.shape[0] != 32 or window.shape[1] != 32:
+        #     print('\n\n*************\n window number {}: {} {}\n\n'.format(window_number, window.shape[0],window.shape[1]))
+            
+        #     plt.imshow(window)
+        #     plt.show()
+
+    return np.array(windows), centers
+
+
+
+
+#==================================
+# W-net
+#==================================
+
+def build_unet(input_tensor, name_prefix='unet'):
+    tf.random.set_seed(42)  # Set seed for reproducibility
+    # Encoder
+    c1 = layers.Conv2D(32, 3, activation='relu', padding='same', kernel_initializer='he_normal', name=f'{name_prefix}_conv1')(input_tensor)
+    d1 = layers.Dropout(0.1, name=f'{name_prefix}_drop1')(c1)
+    p1 = layers.MaxPooling2D(2, name=f'{name_prefix}_pool1')(d1)
+
+    c2 = layers.Conv2D(64, 3, activation='relu', padding='same', kernel_initializer='he_normal', name=f'{name_prefix}_conv2')(p1)
+    d2 = layers.Dropout(0.1, name=f'{name_prefix}_drop2')(c2)
+    p2 = layers.MaxPooling2D(2, name=f'{name_prefix}_pool2')(d2)
+
+    c3 = layers.Conv2D(128, 3, activation='relu', padding='same', kernel_initializer='he_normal', name=f'{name_prefix}_conv3')(p2)
+    d3 = layers.Dropout(0.1, name=f'{name_prefix}_drop3')(c3)
+    p3 = layers.MaxPooling2D(2, name=f'{name_prefix}_pool3')(d3)
+    # Bottleneck
+    b = layers.Conv2D(256, 3, activation='relu', padding='same', kernel_initializer='he_normal', name=f'{name_prefix}_bottleneck')(p3)
+
+    # Decoder
+    u1 = layers.UpSampling2D(size=2, name=f'{name_prefix}_up1')(b)
+    u1 = layers.Conv2D(128, 3, activation='relu', padding='same',
+                       kernel_initializer='he_normal', name=f'{name_prefix}_upconv1')(u1)
+    u1 = layers.concatenate([u1, c3], axis=-1, name=f'{name_prefix}_skip1')
+    c5 = layers.Conv2D(128, 3, activation='relu', padding='same',
+                       kernel_initializer='he_normal', name=f'{name_prefix}_conv4')(u1)
+    
+    u2 = layers.UpSampling2D(size=2, name=f'{name_prefix}_up2')(c5)
+    u2 = layers.Conv2D(64, 3, activation='relu', padding='same',
+                       kernel_initializer='he_normal', name=f'{name_prefix}_upconv2')(u2)
+    u2 = layers.concatenate([u2, c2], axis=-1, name=f'{name_prefix}_skip2')
+    c6 = layers.Conv2D(64, 3, activation='relu', padding='same',
+                       kernel_initializer='he_normal', name=f'{name_prefix}_conv5')(u2)
+    
+    u3 = layers.UpSampling2D(size=2, name=f'{name_prefix}_up3')(c6)
+    u3 = layers.Conv2D(32, 3, activation='relu', padding='same',
+                       kernel_initializer='he_normal', name=f'{name_prefix}_upconv3')(u3)
+    u3 = layers.concatenate([u3, c1], axis=-1, name=f'{name_prefix}_skip3')
+    c7 = layers.Conv2D(32, 3, activation='relu', padding='same',
+                       kernel_initializer='he_normal', name=f'{name_prefix}_conv6')(u3)
+    
+    return c7
+
+
+def build_wnet(window_size, num_classes=5):
+    inputs = tf.keras.Input(shape=(window_size, window_size, 1), name='input_image')
+
+    # First U-Net: segmentation
+    seg_features = build_unet(inputs, name_prefix='seg')
+    seg_output = layers.Conv2D(num_classes, 1, activation='softmax', name='seg_output')(seg_features)
+
+    # Second U-Net: reconstruction from segmentation
+    recon_features = build_unet(seg_output, name_prefix='recon')
+    recon_output = layers.Conv2D(num_classes, 1, activation='softmax', name='recon_output')(recon_features)
+
+    return tf.keras.Model(inputs=inputs, outputs=[seg_output, recon_output], name='wnet')
