@@ -1515,7 +1515,7 @@ def detect_features_find_centres(cluster_img, max_size=20000, area_threshold=10,
     return features, centers, labeled_array, num_features
 
 def detect_features_better(cluster_img, max_size=3000, area_threshold=10):
-    area_threshold = 20  # Define the area threshold for morphological operations
+    
     data = cluster_img.astype("int32")
     boundaries = segmentation.find_boundaries(data, mode="outer")
 
@@ -1651,9 +1651,102 @@ def extract_feature_windows(image, centers, px=128):
         #     plt.imshow(window)
         #     plt.show()
 
-    return np.array(windows), centers
+    return np.array(windows)
+#======================================================================
+#clustering feature windows
+#======================================================================
 
+def extract_latent_features_to_disk_from_prebatched_feature_windows(
+    autoencoder_model,
+    dataset,
+    features_path,
+    bottleneck_layer_name='bottleneck',
+    features_name='latent_features',
+    return_array=False,
+    verbose=False):
+    """
+    Extracts latent features from a pre-batched TensorFlow dataset, where each batch is processed
+    and saved directly as a corresponding batch of latent features.
 
+    Parameters:
+    - autoencoder_model: The trained autoencoder model to extract latent features.
+    - dataset: The TensorFlow dataset containing pre-batched input windows.
+    - features_path: The directory where latent features should be saved.
+    - bottleneck_layer_name: The name of the bottleneck layer in the autoencoder model.
+    - features_name: The base name for the saved feature files.
+    - verbose: Whether to print progress information.
+
+    Structure of Saved Data:
+    - Each batch is saved as a .npy file containing a 2D NumPy array.
+    - Shape: (batch_size, latent_dim), where:
+        - batch_size is the number of samples in the batch.
+        - latent_dim is the flattened size of the bottleneck layer.
+    - Each row represents the latent feature vector for a single input window.
+    """
+    # Create encoder model to extract latent space from the specified bottleneck layer
+    encoder_model = tf.keras.Model(
+        inputs=autoencoder_model.input,
+        outputs=autoencoder_model.get_layer(bottleneck_layer_name).output
+    )
+
+    if return_array:
+        latent_features_all = []
+    else:
+        # Ensure the output directory exists
+        if not os.path.exists(features_path):
+            os.makedirs(features_path)
+
+    # Process each batch in the dataset
+    for i, batch in enumerate(dataset):
+        inputs = batch if isinstance(batch, tf.Tensor) else batch[0]  # Handle datasets with or without labels
+        inputs_resized = tf.image.resize(inputs, (32,32))  # Resize inputs to match the model input size
+        batch_shape = tf.shape(inputs_resized).numpy()
+        if verbose: 
+            print(f"Processing batch {i + 1}, input shape: {batch_shape}")
+        
+        # Compute latent features for the current batch
+        latent_features_batch = encoder_model.predict(inputs_resized, verbose=0)
+        
+        # Flatten latent features if necessary
+        if len(latent_features_batch.shape) > 2:
+            flattened_latent_features = tf.reshape(
+                latent_features_batch, 
+                [latent_features_batch.shape[0], -1]
+            ).numpy()
+        else:
+            flattened_latent_features = latent_features_batch
+        
+        # Validate output shape (N, M)
+        latent_shape = flattened_latent_features.shape
+
+        if i==0: 
+            sample_batch_shape = flattened_latent_features.shape
+
+        if verbose:
+            print(f"Latent features shape for batch {i + 1}: {latent_shape}")
+        else:
+            if i>0 and i%100==0:
+                print(i,)
+            else:
+                print('.',end='')
+        
+        if return_array:
+            latent_features_all.append(flattened_latent_features)
+        else:
+            # Save the latent features batch to disk
+            file_path = os.path.join(features_path, f"{features_name}_batch_{i}.npy")
+            np.save(file_path, flattened_latent_features)
+            if verbose:
+              print(f"Saved latent features for batch {i + 1} to {file_path}")
+    
+    if return_array:
+        # Combine all latent features into a single array
+        latent_features_all = np.concatenate(latent_features_all, axis=0)
+        print(f"Combined latent features shape: {latent_features_all.shape}")
+        return latent_features_all, latent_features_all.shape[0]
+    else:
+        print(f"\nAll latent features have been saved to {features_path}.")
+        print(f"Sample batch shape: {sample_batch_shape}")
 
 
 #==================================

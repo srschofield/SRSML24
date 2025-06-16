@@ -1306,3 +1306,40 @@ def reconstruct_cluster_image(windows_coordinates, window_size, cluster_labels):
     reconstructed_image /= weight_matrix
 
     return reconstructed_image
+
+
+
+# ============================================================================
+#Adam
+# ============================================================================
+
+def save_feature_windows_together(img_windows, coordinates, save_dir, base_filename='feature_window', verbose=False):
+    """
+    Save each image window from a 3D numpy array to separate raw binary files (NumPy format).
+    Also save the coordinates of each window to a text file.
+
+    Parameters:
+        img_windows (np.array): 3D numpy array of image windows (shape: [num_windows, height, width]).
+        coordinates (np.array): 2D numpy array of window coordinates (shape: [num_windows, 3]).
+        save_dir (str): Directory where the raw data will be saved.
+        base_filename (str): Base name for each window file.
+        verbose (bool): If True, print out additional information.
+        batch_save (bool): If True, save all windows in one batch file.
+    """
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # Save all image windows in a single .npy file
+    save_path = os.path.join(save_dir, f"{base_filename}_all_windows.npy")
+    np.save(save_path, img_windows)
+    if verbose:
+        num_windows = len(img_windows)
+        print(f'Saved {num_windows} windows to {save_path}')
+
+    # Save the coordinates as a text file with formatted columns
+    coordinates_filename = f"{base_filename}_coordinates.txt"
+    coordinates_path = os.path.join(save_dir, coordinates_filename)
+    #fmt = '%05d          %-15s%-15s'
+    header = f"{'X_Position':<15}{'Y_Position':<15}"
+    np.savetxt(coordinates_path, coordinates, header=header, comments='')
+    if verbose:
+        print(f'Saved coordinates to {coordinates_path}\n')
