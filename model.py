@@ -33,8 +33,10 @@ import pickle
 import tensorflow as tf
 from tensorflow.keras import layers
 
+import sklearn
 from sklearn.cluster import KMeans
 from sklearn.cluster import MiniBatchKMeans
+
 
 from sklearn.metrics import silhouette_score
 from sklearn.decomposition import PCA
@@ -1538,11 +1540,15 @@ def detect_features_better(cluster_img, max_size=3000, area_threshold=10):
 
     foreground = area_opened > 0  # Convert to boolean type for morphological operations
     dilated = morphology.binary_dilation(foreground, morphology.disk(1))  # Dilate the foreground to connect nearby features
-    labeled_array, num_features = scipy.ndimage.label(dilated)  # Use a 3x3 structure for connectivity
+    closed = morphology.binary_closing(dilated, morphology.disk(2))  # Close small gaps in the foreground
+    labeled_array, num_features = scipy.ndimage.label(closed)  # Use a 3x3 structure for connectivity
 
-    centers = scipy.ndimage.center_of_mass(foreground, labeled_array, range(1, num_features + 1))
+    #clearning the background
+    closed = morphology.closing(labeled_array, morphology.disk(2))  # Close small gaps in the foreground
+    opened = morphology.opening(closed, morphology.disk(2))  # Open small gaps in the foreground
+    
+    centers = scipy.ndimage.center_of_mass(opened, labeled_array, range(1, num_features + 1))
     centers = np.array(centers)  # Convert to numpy array for easier manipulation
-
 
     
     return labeled_array, centers, num_features
@@ -1749,6 +1755,71 @@ def extract_latent_features_to_disk_from_prebatched_feature_windows(
         print(f"Sample batch shape: {sample_batch_shape}")
 
 
+def train_dbscan(data_pipeline, eps=0.5, min_samples=5):
+    
+    
+    dbscan = sklearn.cluster.DBSCAN(
+        eps=eps,  # Maximum distance between two samples for one to be considered
+        min_samples=min_samples,  # Minimum number of samples in a neighborhood for a point to
+        # be considered a core point
+        metric='euclidean',  # Distance metric to use
+    )
+    
+    
+
+
+    for i, batch in enumerate(data_pipeline):
+        # Convert batch to NumPy array if needed
+        latent_features_batch = np.array(batch) if isinstance(batch, tf.Tensor) else batch
+        latent_features_batch = latent_features_batch.reshape(-1, latent_features_batch.shape[-1])
+
+        # Perform fitting with the current batch
+        dbscan.fit(latent_features_batch)
+
+
+        print(f"Batch {i+1} processed")
+        sys.stdout.flush()
+
+    return dbscan
+
+
+def train_spectral_clustering(data_pipeline, n_clusters=10, affinity='nearest_neighbors', n_neighbors=10):
+    """
+    Trains a Spectral Clustering model using latent feature data from a TensorFlow data pipeline.
+
+    Parameters:
+    -----------
+    data_pipeline : tf.data.Dataset
+        A TensorFlow Dataset object yielding batches of latent feature vectors.
+    n_clusters : int, optional
+        The number of clusters to form. Default is 10.
+    affinity : str, optional
+        The type of affinity to use. Default is 'nearest_neighbors'.
+    n_neighbors : int, optional
+        Number of neighbors to use for the nearest neighbors graph. Default is 10.
+
+    Returns:
+    --------
+    SpectralClustering
+        A trained Spectral Clustering model fitted to the latent features from the dataset.
+    """
+    
+    # Initialize Spectral Clustering model
+    spectral_clustering = sklearn.cluster.SpectralClustering(
+        n_clusters=n_clusters,
+        affinity=affinity,
+        n_neighbors=n_neighbors,
+        assign_labels='kmeans',  # Use k-means for label assignment
+        random_state=42  # For reproducibility
+    )
+    
+    all_latent_features = gather_latent_features(data_pipeline)
+
+    # Fit the model on the entire dataset at once
+    spectral_clustering.fit(all_latent_features)
+
+    return spectral_clustering
+    
 #==================================
 # W-net
 #==================================
