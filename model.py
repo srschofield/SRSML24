@@ -42,6 +42,7 @@ from sklearn.metrics import silhouette_score
 from sklearn.decomposition import PCA
 import joblib # for saving cluster model
 
+import skimage
 from skimage.measure import label, regionprops
 
 # Adam dependencies
@@ -49,6 +50,8 @@ import scipy
 import skimage as ski
 from skimage import morphology, measure
 from skimage import segmentation
+from skimage.morphology import closing, disk, remove_small_holes, erosion
+
 
 import SRSML24.utils as ut
 import SRSML24.data_prep as dp
@@ -1394,9 +1397,20 @@ def load_latent_features(features_path, features_name='latent_features'):
 
 def reconstruct_predict(prediction_file, coords_file, autoencoder_model, cluster_model, window_size, predictions_batch_size):
     """
-    Reconstructs an image and its cluster predictions from a prediction file and coordinates file.
+    Reconstructs an image from a prediction file and a coordinates file containing all the image windows. Predicts the cluster labels for the image windows using a trained autoencoder and clustering model. 
     
-    Returns: reconstructed_img, cluster_img
+    parameters:
+    -   prediction_file: str, path to the file containing the image windows predictions.
+    -   coords_file: str, path to the file containing the coordinates of the image windows.
+    -   autoencoder_model: tf.keras.Model, the trained autoencoder model used to extract latent features
+    -   cluster_model: sklearn model, the trained clustering model used to predict cluster labels
+    -   window_size: int, size of the image windows used for reconstruction.
+    -   predictions_batch_size: int, batch size for processing the image windows.
+    
+    Returns:
+    -   reconstructed_img: np.ndarray, the reconstructed image from the prediction file.
+    -   cluster_img: np.ndarray, the image with cluster labels predicted for each pixel.
+    
     """
     # Load the windows for the image as a numpy file
     image_windows = np.load(prediction_file)
@@ -1439,7 +1453,7 @@ def reconstruct_predict(prediction_file, coords_file, autoencoder_model, cluster
 
 def remove_small_objects(ar, min_size=7,out=None):
     """
-    Remove small objects from a binary array.
+    Remove small objects from a binary array. Disconnected objects with the same label treated as one object.
     
     Parameters:
     - ar: Input binary array.
@@ -1464,7 +1478,7 @@ def remove_small_objects(ar, min_size=7,out=None):
 
 def remove_large_objects(ar, max_size=5000, out=None):
     """
-    Remove large objects from a binary array.
+    Remove large objects from a binary array. Disconnected objects with the same label treated as one object.
     
     Parameters:
     - ar: Input binary array.
@@ -1487,6 +1501,20 @@ def remove_large_objects(ar, max_size=5000, out=None):
     return out
 
 def detect_features_find_centres(cluster_img, max_size=20000, area_threshold=10,):
+    """
+    Detect features in a clustered image and find their centers.
+    
+    Parameters:
+    - cluster_img: Input clustered image, a labeled image. Each pixel value represents a cluster label.
+    - max_size: Maximum size of objects to keep.
+    - area_threshold: Minimum area for morphological operations.
+    
+    Returns:
+    - features: Labeled array of detected features. - same as labeled_array
+    - centers: List of coordinates for the centers of detected features.
+    - labeled_array: Labeled array of connected components.
+    - num_features: Number of detected features.
+    """
     data_postprocess = cluster_img.astype("int")  # Convert to boolean type for morphological operations
 
     #remove background
@@ -1516,7 +1544,23 @@ def detect_features_find_centres(cluster_img, max_size=20000, area_threshold=10,
     features = labeled_array
     return features, centers, labeled_array, num_features
 
-def detect_features_better(cluster_img, max_size=3000, area_threshold=10):
+def detect_features_better(cluster_img, max_size=3000, area_threshold=10, min_area=50):
+    """
+    NOT NECESSARILY BETTER, BUT DIFFERENT. 
+    Detect features in a clustered image and find their centers. Different from `detect_features_find_centres` in that it finds the contours of each feature.
+    More likely to find all the features in the image. More susceptible to noise.
+    
+    Parameters:
+    - cluster_img: Input clustered image, a labeled image. Each pixel value represents a cluster label.
+    - max_size: Maximum size of objects to keep.
+    - area_threshold: Minimum area for morphological operations.
+    
+    Returns:
+    - labeled_array: Labeled array of connected components.
+    - centers: List of coordinates for the centers of detected features.
+    - num_features: Number of detected features.
+    """
+    
     
     data = cluster_img.astype("int32")
     boundaries = segmentation.find_boundaries(data, mode="outer")
@@ -1532,8 +1576,10 @@ def detect_features_better(cluster_img, max_size=3000, area_threshold=10):
     for region_id in range(1, num_regions + 1):
         area = np.sum(labeled_regions == region_id)
         areas[region_id] = area
+
         
-    large_removed = remove_large_objects(labeled_regions, max_size=max_size)
+    small_removed = remove_small_objects(labeled_regions, min_size=min_area)
+    large_removed = remove_large_objects(small_removed, max_size=max_size)
 
     area_closed = morphology.area_closing(large_removed, area_threshold=area_threshold)  # Apply closing operation to fill small holes
     area_opened = morphology.area_opening(area_closed, area_threshold=area_threshold)  # Apply opening operation to remove small objects
@@ -1553,25 +1599,66 @@ def detect_features_better(cluster_img, max_size=3000, area_threshold=10):
     
     return labeled_array, centers, num_features
 
+def detect_centers(cluster_img, min_size=350):
+    centers=[]
+
+    for cluster_id in np.unique(cluster_img):
+        
+        # Example: focus on cluster label 2 (modify as needed)
+        binary_mask = (cluster_img == cluster_id)
+
+        #extra things
+        #foreground = binary_mask > 0
+        #labeled_array, num_features = scipy.ndimage.label(foreground)  # Use a 3x3 structure for connectivity
+        #binary_mask = labeled_array.astype(int)
+        
+        
+        # Fill small holes
+        cleaned = closing(binary_mask, disk(2))
+        cleaned = remove_small_objects(cleaned, min_size=min_size)
+        cleaned = remove_small_holes(cleaned, area_threshold=min_size)
+        #erosion
+        cleaned = erosion(cleaned, disk(2))
+        cleaned = erosion(cleaned, disk(2))
+        cleaned = erosion(cleaned, disk(2))
+        cleaned = erosion(cleaned, disk(2))
+
+        #cleaned = skimage.morphology.erosion(cleaned, disk(2))
+        #cleaned = skimage.morphology.erosion(cleaned, disk(2))
+
+
+        # additional cleaning
+        
+        # Label the connected components in the binary mask
+        labeled = label(cleaned)
+
+        # Extract region properties
+        regions = regionprops(labeled)
+
+        # Plot centroids
+        for region in regions:
+            y, x = region.centroid
+            centers.append([y,x])
+        
+    return np.array(centers)
+
+
 def display_reconstructed_and_cluster_images_and_extracted_features(reconstructed_img, cluster_img, features_img, centers, 
                                              save_to_disk=False, output_path=None, image_name='img', dpi=150):
     """
     Display side-by-side images: the reconstructed input image, the cluster labels,
-    and the highlighted features.
+    and the highlighted features. Centers of detected features are highlighted in red on all images.
 
     Parameters:
-    - reconstructed_img (ndarray): The reconstructed image, typically the output
-      from an autoencoder or similar model.
-    - cluster_img (ndarray): The image showing cluster labels, usually resulting
-      from clustering analysis on the latent space.
+    - reconstructed_img (ndarray): The reconstructed image
+    - cluster_img (ndarray): The image showing cluster labels, resulting
+      from clustering analysis on the latent space. Used to assess the clustering quality.
     - features_img (ndarray): The image showing highlighted features, such as
-      detected regions or points of interest.
+      vacancies or adsorbed molecules. Used to assess the feature detection quality.
     - centers (list): List of coordinates for the centers of detected features.
-    #- show_overlay (bool): Optional; if True, displays a third panel with an overlay
-    #  of the reconstructed image and cluster labels. Default is True.
     - save_to_disk (bool): Optional; if True, saves the image to disk instead of displaying it. Default is False.
     - output_path (str): The path to save the image if save_to_disk is True. Required if save_to_disk is True.
-    - dpi (int): Optional; the resolution in dots per inch for saving the image. Default is 300.
+    - dpi (int): Optional; the resolution in dots per inch for saving the image. Default is 150.
 
     Returns:
     - None: This function either displays the plot or saves it to disk based on save_to_disk.
@@ -1623,7 +1710,15 @@ def display_reconstructed_and_cluster_images_and_extracted_features(reconstructe
 
 
 def extract_feature_windows(image, centers, px=128):
-
+    """ Extracts square windows of size (px * 2, px * 2) from the input image at specified centers.
+    Parameters:
+    - image: np.ndarray, the input image from which to extract windows.
+    - centers: np.ndarray, an array of shape (N, 2) where N is the number of centers,
+      and each center is specified as (y, x) coordinates.
+    - px: int, the half-width of the square windows to extract. The full window size will be (px * 2, px * 2).
+    Returns:
+    - windows: np.ndarray, an array of shape (N, px * 2, px * 2) containing the extracted windows.
+    """
     
     #print('EXTRRACTING WINDOWS. ORIG IMAGE: Height {} Width {}'.format(height, width))
     height, width = image.shape
@@ -1756,6 +1851,24 @@ def extract_latent_features_to_disk_from_prebatched_feature_windows(
 
 
 def train_dbscan(data_pipeline, eps=0.5, min_samples=5):
+    """    Trains a DBSCAN clustering model using latent feature data from a TensorFlow data pipeline.
+    
+    Parameters:
+    -----------
+    data_pipeline : tf.data.Dataset
+        A TensorFlow Dataset object yielding batches of latent feature vectors.
+    eps : float, optional
+        The maximum distance between two samples for one to be considered as in the neighborhood of the other.
+        Default is 0.5.
+    min_samples : int, optional
+        The number of samples in a neighborhood for a point to be considered a core point.
+        Default is 5.
+        
+    Returns:
+    --------
+    DBSCAN
+        A trained DBSCAN model fitted to the latent features from the dataset.
+    """
     
     
     dbscan = sklearn.cluster.DBSCAN(
