@@ -20,6 +20,8 @@ import platform
 import os
 import subprocess 
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+import skimage.morphology
 import numpy as np
 from datetime import datetime
 
@@ -1614,14 +1616,14 @@ def detect_centers(cluster_img, min_size=350):
         
         
         # Fill small holes
-        cleaned = closing(binary_mask, disk(2))
-        cleaned = remove_small_objects(cleaned, min_size=min_size)
-        cleaned = remove_small_holes(cleaned, area_threshold=min_size)
+        cleaned = skimage.morphology.closing(binary_mask, disk(2))
+        cleaned = skimage.morphology.remove_small_objects(cleaned, min_size=min_size)
+        cleaned = skimage.morphology.remove_small_holes(cleaned, area_threshold=min_size)
         #erosion
-        cleaned = erosion(cleaned, disk(2))
-        cleaned = erosion(cleaned, disk(2))
-        cleaned = erosion(cleaned, disk(2))
-        cleaned = erosion(cleaned, disk(2))
+        cleaned = skimage.morphology.erosion(cleaned, disk(2))
+        cleaned = skimage.morphology.erosion(cleaned, disk(2))
+        cleaned = skimage.morphology.erosion(cleaned, disk(2))
+        cleaned = skimage.morphology.erosion(cleaned, disk(2))
 
         #cleaned = skimage.morphology.erosion(cleaned, disk(2))
         #cleaned = skimage.morphology.erosion(cleaned, disk(2))
@@ -1630,10 +1632,10 @@ def detect_centers(cluster_img, min_size=350):
         # additional cleaning
         
         # Label the connected components in the binary mask
-        labeled = label(cleaned)
+        labeled = skimage.measure.label(cleaned)
 
         # Extract region properties
-        regions = regionprops(labeled)
+        regions = skimage.measure.regionprops(labeled)
 
         # Plot centroids
         for region in regions:
@@ -1709,6 +1711,80 @@ def display_reconstructed_and_cluster_images_and_extracted_features(reconstructe
     plt.close(fig)
 
 
+def display_labels_on_image(reconstructed_img, coordinates, labels, label_num = [], show_cluster_img = False, cluster_img=None):
+    # Get tab20 colors as a list of RGBA tuples
+    tab20 = plt.get_cmap('tab20')
+    colors = [tab20(i) for i in range(20)]
+    
+    if len(label_num) == 0:
+        unique_labels = np.unique(labels)
+    elif len(label_num) != 0:
+        unique_labels = label_num
+    
+
+    patches = []
+    label_names = []
+    
+    # Determine the number of subplots based on show_overlay
+    n_plots = 2 if show_cluster_img else 1
+    fig, ax = plt.subplots(1, n_plots, figsize=(7 * n_plots, 7))
+
+    
+    if show_cluster_img:
+        ax[0].imshow(reconstructed_img, cmap='viridis')
+        ax[0].set_title('Input Image')
+        ax[0].axis('off')  # Remove axis labels
+        
+        ax[1].imshow(cluster_img)
+        ax[1].set_title('Cluster Image')
+        ax[1].axis('off')  # Remove axis labels
+    else:
+        ax.imshow(reconstructed_img, cmap='viridis')
+        ax.set_title('Input Image')
+        ax.axis('off')  # Remove axis labels
+    
+
+    for number in unique_labels:
+        indexes = [i for i, val in enumerate(labels) if val == number]
+        for index in indexes:
+            y, x = coordinates[index]
+            r = plt.Rectangle((x-16, y-16),width = 32, height = 32, color = colors[number], linewidth=1.05, fill = False)
+            if show_cluster_img:
+                ax[0].add_patch(r)
+            else:
+                ax.add_patch(r)
+        
+        # Add a patch for the legend (only once per label)
+        patch = mpatches.Patch(color=colors[number], label=f"Label {number}")
+        patches.append(patch)
+        label_names.append(f"Label {number}")
+    
+    
+
+    
+    if show_cluster_img:
+        ax[0].legend(handles=patches, labels=label_names, loc='upper left', bbox_to_anchor=(1, 1))
+
+        for number in unique_labels:
+            indexes = [i for i, val in enumerate(labels) if val == number]
+            for index in indexes:
+                y, x = coordinates[index]
+                r = plt.Rectangle((x-16, y-16),width = 32, height = 32, color = colors[number], linewidth=1.05, fill = False)
+                ax[1].add_patch(r)
+
+            
+            # Add a patch for the legend (only once per label)
+            patch = mpatches.Patch(color=colors[number], label=f"Label {number}")
+            patches.append(patch)
+            label_names.append(f"Label {number}")
+    else:
+        ax.legend(handles=patches, labels=label_names, loc='upper left', bbox_to_anchor=(1, 1))
+
+    plt.tight_layout()
+
+    plt.show()
+
+
 def extract_feature_windows(image, centers, px=128):
     """ Extracts square windows of size (px * 2, px * 2) from the input image at specified centers.
     Parameters:
@@ -1753,6 +1829,67 @@ def extract_feature_windows(image, centers, px=128):
         #     plt.show()
 
     return np.array(windows)
+
+
+def predict_labels_from_feature_windows(step2_windows_predict_path, step2_latent_features_predict_path, job_data_path, autoencoder_model, cluster_model, cluster_model_type="kmeans", image_num = 0, feature_size = 16, predictions_batch_size=2**15):
+
+    # Prediction data - tensorflow data pipeline 
+    step2_predict_files, step2_num_predict = dp.list_files_by_extension(step2_windows_predict_path, 'npy')
+
+    #create a dataset for each image
+    step2_predict_dataset = create_tf_dataset_batched(
+        step2_predict_files[image_num:image_num+1],  # Use only one file for predictions
+        batch_size=predictions_batch_size, 
+        #buffer_size=cluster_buffer_size, 
+        window_size=feature_size*2,  # feature windows are 2*feature_size
+        is_autoencoder=True, 
+        shuffle=False)
+
+    dp.delete_data_folders(job_data_path, subdirectories=["step2/latent_features/predict"], override=True)
+
+    #create latent features for each image
+    extract_latent_features_to_disk_from_prebatched_windows(
+        autoencoder_model, 
+        step2_predict_dataset, 
+        step2_latent_features_predict_path, 
+        bottleneck_layer_name='bottleneck',
+        features_name='feature_windows_latent_features_predict',
+        return_array=False,
+        verbose=True)
+
+    step2_predict_latent_features_files, step2_num_latent_files = dp.list_files_by_extension(step2_latent_features_predict_path, 'npy')
+
+    # Load the latent features from disk into a tensor dataset pipeline
+    #step2_predict_latent_features_dataset = m.create_latent_features_tf_dataset(
+    #    step2_predict_latent_features_files,
+    #    batch_size=cluster_batch_size,
+    #    shuffle=False, 
+    #    shuffle_buffer_size=cluster_buffer_size)
+
+
+    data = np.load(step2_predict_latent_features_files[0])
+
+    if cluster_model_type == "kmeans":
+        labels = cluster_model.predict(data)
+    if cluster_model_type == "spectral":
+        labels = cluster_model.fit_predict(data)
+
+    image = np.load(step2_predict_files[image_num])
+    
+    return image, labels
+
+
+# Display the first 64 images in a 8x8 grid along with their labels
+def display_feature_windows_with_labels(images, labels, num_images=64):
+    plt.figure(figsize=(12, 12))
+    for i in range(num_images):
+        plt.subplot(10, 10, i + 1)
+        plt.imshow(images[i].squeeze(), cmap='viridis')
+        plt.title(f'Label: {labels[i]}')
+        plt.axis('off')
+    plt.tight_layout()
+    plt.show()
+
 #======================================================================
 #clustering feature windows
 #======================================================================
@@ -1933,6 +2070,31 @@ def train_spectral_clustering(data_pipeline, n_clusters=10, affinity='nearest_ne
 
     return spectral_clustering
     
+    
+    
+def extract_and_save_feature_windows(file_list, coordinate_file_list, autoencoder_model, cluster_model, window_size=32, predictions_batch_size=128, feature_size=16, save_path=None, verbose=True):
+    for image_num in range(len(file_list)):
+        prediction_file = file_list[image_num]  
+        coords_file = coordinate_file_list[image_num]  
+
+        #get reconstructed image and cluster image
+        reconstructed_img, cluster_img = reconstruct_predict(prediction_file, coords_file, autoencoder_model, cluster_model, window_size, predictions_batch_size)
+
+        # Detect features and find centers
+        #labeled_array, centers, num_features = m.detect_features_better(cluster_img, max_size=max_size_blob, area_threshold=area_threshold)
+        #features, centers, labeled_array, num_features = m.detect_features_find_centres(cluster_img, max_size=70000, area_threshold=64,)
+        centers = detect_centers(cluster_img, min_size=350)
+
+        #extract feature windows from the reconstructed image
+        feature_windows = extract_feature_windows(reconstructed_img, centers, px=feature_size)
+
+        image_name = os.path.splitext(os.path.basename(prediction_file))[0]
+        # Save the feature windows to disk for each reconstructed image
+        dp.save_feature_windows_together(feature_windows, centers, save_path, base_filename=image_name, verbose=True)
+
+        #save / display the reconstructed and cluster images with centers highlighted
+        #m.display_reconstructed_and_cluster_images_and_extracted_features(reconstructed_img, cluster_img, labeled_array, centers,
+        #                                                                  save_to_disk=True, output_path=feature_predictions_path, image_name=image_name, dpi=150)
 #==================================
 # W-net
 #==================================
