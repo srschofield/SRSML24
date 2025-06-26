@@ -1602,6 +1602,18 @@ def detect_features_better(cluster_img, max_size=3000, area_threshold=10, min_ar
     return labeled_array, centers, num_features
 
 def detect_centers(cluster_img, min_size=350):
+    """
+    Detect features in a clustered image and find their centers. Different from `detect_features_find_centres` in that it finds the contours of each feature.
+    More likely to find all the features in the image. Most susceptible to noise in cluster images. This is the default function used in feature extraction.
+    
+    Parameters:
+    - cluster_img: Input clustered image, a labeled image. Each pixel value represents a cluster label.
+    - min_size: Minimum size of objects to keep.
+    
+    Returns:
+    - centers: Numpy array of coordinates for the centers of detected features.
+    """
+    
     centers=[]
 
     for cluster_id in np.unique(cluster_img):
@@ -1712,6 +1724,21 @@ def display_reconstructed_and_cluster_images_and_extracted_features(reconstructe
 
 
 def display_labels_on_image(reconstructed_img, coordinates, labels, label_num = [], show_cluster_img = False, cluster_img=None):
+    """
+    Display the reconstructed input image with the feature labels enclosed in squares. Different labels are shown as different colours using the `tab20` colormap from matplotlib.
+    Optionally, the cluster image is shown side by side. The user can select which feature labels to show using the label_num array.
+
+    Parameters:
+    - reconstructed_img (ndarray): The reconstructed image
+    - coordinates (narray): List of coordinates for the centers of detected features. Shape (num_features, 2)
+    - labels (list): Optional. List of labels (int) for each coordinate.
+    - show_cluster_img (bool): Optional. Default False. Whether to show the cluster image on the side
+    - cluster_img (narray): Optional, default None. The cluster image
+    
+    Returns:
+    - None: This function either displays the plot
+    """
+    
     # Get tab20 colors as a list of RGBA tuples
     tab20 = plt.get_cmap('tab20')
     colors = [tab20(i) for i in range(20)]
@@ -1832,8 +1859,25 @@ def extract_feature_windows(image, centers, px=128):
 
 
 def predict_labels_from_feature_windows(step2_windows_predict_path, step2_latent_features_predict_path, job_data_path, autoencoder_model, cluster_model, cluster_model_type="kmeans", image_num = 0, feature_size = 16, predictions_batch_size=2**15):
-
-    # Prediction data - tensorflow data pipeline 
+    """
+    Predicts labels (int) for each feature window of the original image.
+    
+    Parameters:
+    - step2_windows_predict_path: The directory where the feature windows are stored.
+    - step2_latent_features_predict_path: The directory where the latent vectors extracted from the feature windows should be stored.
+    - job_data_path: The directory of the job.
+    - autoencoder_model: tf.keras.Model, the trained autoencoder model used to extract latent features. Step 2 autoencoder, retrained on feature windows.
+    - cluster_model: sklearn model, the trained clustering model used to predict cluster labels. This is the Step 2 cluster model trained on feature windows.
+    - cluster_model_type (str): Optional, default "kmeans". The type of cluster model used. The supported options are "kmeans" and "spectral".
+    - image_num (int): Optional, default 0. The index of the image used.
+    - feature_size (int): Optional, default 16. The half width of the extracted feature window. Currently, only feature size 16 px or the window width of 32 px is supported.
+    - predictions_batch_size (int): Optional, default 2**15. Batch size used for predictions.
+    
+    Returns:
+    - windows (narray): Array of feature windows.
+    - labels (list): List of labels for each feature window.
+    """
+    # Prediction data - tensorflow data pipeline - Feature windows
     step2_predict_files, step2_num_predict = dp.list_files_by_extension(step2_windows_predict_path, 'npy')
 
     #create a dataset for each image
@@ -1847,7 +1891,7 @@ def predict_labels_from_feature_windows(step2_windows_predict_path, step2_latent
 
     dp.delete_data_folders(job_data_path, subdirectories=["step2/latent_features/predict"], override=True)
 
-    #create latent features for each image
+    #create latent features for each feature window 
     extract_latent_features_to_disk_from_prebatched_windows(
         autoencoder_model, 
         step2_predict_dataset, 
@@ -1874,9 +1918,9 @@ def predict_labels_from_feature_windows(step2_windows_predict_path, step2_latent
     if cluster_model_type == "spectral":
         labels = cluster_model.fit_predict(data)
 
-    image = np.load(step2_predict_files[image_num])
+    windows = np.load(step2_predict_files[image_num])
     
-    return image, labels
+    return windows, labels
 
 
 # Display the first 64 images in a 8x8 grid along with their labels
@@ -2072,7 +2116,49 @@ def train_spectral_clustering(data_pipeline, n_clusters=10, affinity='nearest_ne
     
     
     
-def extract_and_save_feature_windows(file_list, coordinate_file_list, autoencoder_model, cluster_model, window_size=32, predictions_batch_size=128, feature_size=16, save_path=None, verbose=True):
+def extract_and_save_feature_windows(file_list, coordinate_file_list, autoencoder_model, cluster_model, window_size=32, predictions_batch_size=128, feature_size=16, save_path=None, verbose=True, feature_extract_alg=0):
+    """
+    Extracts feature windows from a list of images using a trained autoencoder and clustering model, and saves them to disk.
+
+    For each image in the provided file list, this function:
+      1. Reconstructs the image and generates a cluster label map using the autoencoder and clustering model.
+      2. Detects features (e.g., defects, molecules) in the cluster image using one of several feature extraction algorithms.
+      3. Extracts square windows centered on the detected features from the reconstructed image.
+      4. Saves the extracted feature windows and their coordinates to disk for later use.
+
+    Parameters
+    ----------
+    file_list : list of str
+        List of file paths to the prediction data (image windows) for each image.
+    coordinate_file_list : list of str
+        List of file paths to the coordinate files corresponding to each image in file_list.
+    autoencoder_model : tf.keras.Model
+        Trained autoencoder model used to extract latent features from image windows.
+    cluster_model : sklearn.cluster model
+        Trained clustering model (e.g., KMeans) used to assign cluster labels to latent features.
+    window_size : int, optional
+        Size of the image windows used for reconstruction (default: 32).
+    predictions_batch_size : int, optional
+        Batch size for processing image windows during prediction (default: 128).
+    feature_size : int, optional
+        Half-width of the square feature window to extract around each detected feature (default: 16).
+        The extracted windows will have shape (2*feature_size, 2*feature_size).
+    save_path : str, optional
+        Directory where the extracted feature windows and their coordinates will be saved.
+    verbose : bool, optional
+        If True, prints progress and information during processing (default: True).
+    feature_extract_alg : int, optional
+        Algorithm to use for feature extraction:
+            0 - Most features (default, but may include noise)
+            1 - Most conservative (least noise, may miss features)
+            2 - Middle ground
+            Any other value defaults to algorithm 0.
+
+    Returns
+    -------
+    None
+        The function saves the extracted feature windows and their coordinates to disk for each image.
+    """
     for image_num in range(len(file_list)):
         prediction_file = file_list[image_num]  
         coords_file = coordinate_file_list[image_num]  
@@ -2081,9 +2167,15 @@ def extract_and_save_feature_windows(file_list, coordinate_file_list, autoencode
         reconstructed_img, cluster_img = reconstruct_predict(prediction_file, coords_file, autoencoder_model, cluster_model, window_size, predictions_batch_size)
 
         # Detect features and find centers
-        #labeled_array, centers, num_features = m.detect_features_better(cluster_img, max_size=max_size_blob, area_threshold=area_threshold)
         #features, centers, labeled_array, num_features = m.detect_features_find_centres(cluster_img, max_size=70000, area_threshold=64,)
-        centers = detect_centers(cluster_img, min_size=350)
+        if feature_extract_alg == 0:#detects most features but also lots of noise
+            centers = detect_centers(cluster_img, min_size=350)
+        elif feature_extract_alg==1: # Most conservative, least noise, but does not pick up all the features
+            features, centers, labeled_array, num_features = detect_features_find_centres(cluster_img, max_size=70000, area_threshold=64,)
+        elif feature_extract_alg==2: # middle of the road option
+            labeled_array, centers, num_features = detect_features_better(cluster_img, max_size=3500, area_threshold=64)
+        else:
+            centers = detect_centers(cluster_img, min_size=350)
 
         #extract feature windows from the reconstructed image
         feature_windows = extract_feature_windows(reconstructed_img, centers, px=feature_size)
