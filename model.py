@@ -1858,7 +1858,7 @@ def extract_feature_windows(image, centers, px=128):
     return np.array(windows)
 
 
-def predict_labels_from_feature_windows(step2_windows_predict_path, step2_latent_features_predict_path, job_data_path, autoencoder_model, cluster_model, cluster_model_type="kmeans", image_num = 0, feature_size = 16, predictions_batch_size=2**15):
+def predict_labels_from_feature_windows(step2_windows_predict_path, step2_latent_features_predict_path, job_data_path, autoencoder_model, cluster_model, cluster_model_type="kmeans", feature_size = 16, predictions_batch_size=2**15):
     """
     Predicts labels (int) for each feature window of the original image.
     
@@ -1882,7 +1882,7 @@ def predict_labels_from_feature_windows(step2_windows_predict_path, step2_latent
 
     #create a dataset for each image
     step2_predict_dataset = create_tf_dataset_batched(
-        step2_predict_files[image_num:image_num+1],  # Use only one file for predictions
+        step2_predict_files[0:1],  # Use only one file for predictions
         batch_size=predictions_batch_size, 
         #buffer_size=cluster_buffer_size, 
         window_size=feature_size*2,  # feature windows are 2*feature_size
@@ -1901,15 +1901,8 @@ def predict_labels_from_feature_windows(step2_windows_predict_path, step2_latent
         return_array=False,
         verbose=True)
 
+
     step2_predict_latent_features_files, step2_num_latent_files = dp.list_files_by_extension(step2_latent_features_predict_path, 'npy')
-
-    # Load the latent features from disk into a tensor dataset pipeline
-    #step2_predict_latent_features_dataset = m.create_latent_features_tf_dataset(
-    #    step2_predict_latent_features_files,
-    #    batch_size=cluster_batch_size,
-    #    shuffle=False, 
-    #    shuffle_buffer_size=cluster_buffer_size)
-
 
     data = np.load(step2_predict_latent_features_files[0])
 
@@ -1918,7 +1911,7 @@ def predict_labels_from_feature_windows(step2_windows_predict_path, step2_latent
     if cluster_model_type == "spectral":
         labels = cluster_model.fit_predict(data)
 
-    windows = np.load(step2_predict_files[image_num])
+    windows = np.load(step2_predict_files[0])
     
     return windows, labels
 
@@ -2116,7 +2109,7 @@ def train_spectral_clustering(data_pipeline, n_clusters=10, affinity='nearest_ne
     
     
     
-def extract_and_save_feature_windows(file_list, coordinate_file_list, autoencoder_model, cluster_model, window_size=32, predictions_batch_size=128, feature_size=16, save_path=None, verbose=True, feature_extract_alg=0):
+def extract_and_save_feature_windows(prediction_file, coords_file, autoencoder_model, cluster_model, window_size=32, predictions_batch_size=128, feature_size=16, save_path=None, verbose=True, feature_extract_alg=0):
     """
     Extracts feature windows from a list of images using a trained autoencoder and clustering model, and saves them to disk.
 
@@ -2128,10 +2121,10 @@ def extract_and_save_feature_windows(file_list, coordinate_file_list, autoencode
 
     Parameters
     ----------
-    file_list : list of str
-        List of file paths to the prediction data (image windows) for each image.
-    coordinate_file_list : list of str
-        List of file paths to the coordinate files corresponding to each image in file_list.
+    prediction_file : str
+        file path to the prediction data (image windows) for each image.
+    coords_file : str
+        File path to the coordinate file corresponding to each image.
     autoencoder_model : tf.keras.Model
         Trained autoencoder model used to extract latent features from image windows.
     cluster_model : sklearn.cluster model
@@ -2159,34 +2152,34 @@ def extract_and_save_feature_windows(file_list, coordinate_file_list, autoencode
     None
         The function saves the extracted feature windows and their coordinates to disk for each image.
     """
-    for image_num in range(len(file_list)):
-        prediction_file = file_list[image_num]  
-        coords_file = coordinate_file_list[image_num]  
 
-        #get reconstructed image and cluster image
-        reconstructed_img, cluster_img = reconstruct_predict(prediction_file, coords_file, autoencoder_model, cluster_model, window_size, predictions_batch_size)
 
-        # Detect features and find centers
-        #features, centers, labeled_array, num_features = m.detect_features_find_centres(cluster_img, max_size=70000, area_threshold=64,)
-        if feature_extract_alg == 0:#detects most features but also lots of noise
-            centers = detect_centers(cluster_img, min_size=350)
-        elif feature_extract_alg==1: # Most conservative, least noise, but does not pick up all the features
-            features, centers, labeled_array, num_features = detect_features_find_centres(cluster_img, max_size=70000, area_threshold=64,)
-        elif feature_extract_alg==2: # middle of the road option
-            labeled_array, centers, num_features = detect_features_better(cluster_img, max_size=3500, area_threshold=64)
-        else:
-            centers = detect_centers(cluster_img, min_size=350)
+    #get reconstructed image and cluster image
+    reconstructed_img, cluster_img = reconstruct_predict(prediction_file, coords_file, autoencoder_model, cluster_model, window_size, predictions_batch_size)
 
-        #extract feature windows from the reconstructed image
-        feature_windows = extract_feature_windows(reconstructed_img, centers, px=feature_size)
+    # Detect features and find centers
+    #features, centers, labeled_array, num_features = m.detect_features_find_centres(cluster_img, max_size=70000, area_threshold=64,)
+    if feature_extract_alg == 0:#detects most features but also lots of noise
+        centers = detect_centers(cluster_img, min_size=350)
+    elif feature_extract_alg==1: # Most conservative, least noise, but does not pick up all the features
+        features, centers, labeled_array, num_features = detect_features_find_centres(cluster_img, max_size=70000, area_threshold=64,)
+    elif feature_extract_alg==2: # middle of the road option
+        labeled_array, centers, num_features = detect_features_better(cluster_img, max_size=3500, area_threshold=64)
+    else:
+        centers = detect_centers(cluster_img, min_size=350)
 
-        image_name = os.path.splitext(os.path.basename(prediction_file))[0]
-        # Save the feature windows to disk for each reconstructed image
-        dp.save_feature_windows_together(feature_windows, centers, save_path, base_filename=image_name, verbose=True)
+    #extract feature windows from the reconstructed image
+    feature_windows = extract_feature_windows(reconstructed_img, centers, px=feature_size)
 
-        #save / display the reconstructed and cluster images with centers highlighted
-        #m.display_reconstructed_and_cluster_images_and_extracted_features(reconstructed_img, cluster_img, labeled_array, centers,
-        #                                                                  save_to_disk=True, output_path=feature_predictions_path, image_name=image_name, dpi=150)
+    image_name = os.path.splitext(os.path.basename(prediction_file))[0]
+    # Save the feature windows to disk for each reconstructed image
+    dp.save_feature_windows_together(feature_windows, centers, save_path, base_filename=image_name, verbose=True)
+
+    #save / display the reconstructed and cluster images with centers highlighted
+    #m.display_reconstructed_and_cluster_images_and_extracted_features(reconstructed_img, cluster_img, labeled_array, centers,
+    #                                                                  save_to_disk=True, output_path=feature_predictions_path, image_name=image_name, dpi=150)
+    
+
 #==================================
 # W-net
 #==================================

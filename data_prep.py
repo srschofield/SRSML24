@@ -1324,7 +1324,6 @@ def save_feature_windows_together(img_windows, coordinates, save_dir, base_filen
         save_dir (str): Directory where the raw data will be saved.
         base_filename (str): Base name for each window file.
         verbose (bool): If True, print out additional information.
-        batch_save (bool): If True, save all windows in one batch file.
     """
     os.makedirs(save_dir, exist_ok=True)
     
@@ -1339,7 +1338,47 @@ def save_feature_windows_together(img_windows, coordinates, save_dir, base_filen
     coordinates_filename = f"{base_filename}_coordinates.txt"
     coordinates_path = os.path.join(save_dir, coordinates_filename)
     #fmt = '%05d          %-15s%-15s'
-    header = f"{'X_Position':<15}{'Y_Position':<15}"
+    header = f"{'Y_Position':<15}{'X_Position':<15}"
     np.savetxt(coordinates_path, coordinates, header=header, comments='')
+    if verbose:
+        print(f'Saved coordinates to {coordinates_path}\n')
+
+
+def save_feature_windows_coords_and_labels(windows, coords, labels, save_dir, base_filename="feature_window", verbose=False):
+    """
+    Save each image feature window from a 3D numpy array to separate raw binary files (NumPy format).
+    Also save the coordinates and label of each feature window to a text file. The coordinates file will have
+    three columns: Y_Position, X_Position, and Label_Number.
+
+    Parameters:
+        windows (np.array): 3D numpy array of image windows (shape: [num_windows, height, width]).
+        coords (np.array): 2D numpy array of window coordinates (shape: [num_windows, 3]).
+        save_dir (str): Directory where the raw data will be saved.
+        base_filename (str): Base name for each window file.
+        verbose (bool): If True, print out additional information.
+    """
+    
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # Save all image windows in a single .npy file
+    save_path = os.path.join(save_dir, f"{base_filename}.npy")
+    np.save(save_path, windows)
+    if verbose:
+        num_windows = len(windows)
+        print(f'Saved {num_windows} windows to {save_path}')
+
+    # Save the coordinates as a text file with formatted columns
+    coordinates_filename = f"{base_filename}_coordinates.txt"
+    coordinates_path = os.path.join(save_dir, coordinates_filename)
+    #fmt = '%05d          %-15s%-15s'
+    
+    # Ensure sorted_labels is (210, 1)
+    labels_col = np.expand_dims(labels, axis=1) if labels.ndim == 1 else labels
+
+    # Combine
+    coords_labels = np.hstack((coords, labels_col))  # shape (N, 3)
+    
+    header = f"{'Y_Position':<15}{'X_Position':<15}{'Label_Number'}"
+    np.savetxt(coordinates_path, coords_labels, header=header, comments='')
     if verbose:
         print(f'Saved coordinates to {coordinates_path}\n')
