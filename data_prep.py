@@ -856,6 +856,8 @@ def save_as_jpg(img, save_path, cmap='gray', metadata=None,
     if save_meta_data_on_jpg and metadata is not None:
         # Safely extract values with defaults
         filename = metadata.get('filename', 'N/A')
+        date_and_time = metadata.get('date_and_time', 'N/A')
+        print(date_and_time)
         bias = metadata.get('bias', None)
         bias_unit = metadata.get('bias_unit', '')
         current = metadata.get('current', None)
@@ -907,6 +909,7 @@ def save_as_jpg(img, save_path, cmap='gray', metadata=None,
         lines = []
 
         # date-time (from filename)
+        lines.append(f"{date_and_time}")
         lines.append(f"{date_time}")
 
         #  image number/id if we successfully parsed it
