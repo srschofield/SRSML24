@@ -16,6 +16,7 @@ Created October 2024
 # Module dependencies
 # ============================================================================
 
+from curses import meta
 import os, sys
 
 # Third-party library imports
@@ -43,6 +44,12 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
 from scipy.signal import savgol_filter
+
+from PIL import Image, ImageDraw, ImageFont
+
+import re
+
+import matplotlib.font_manager as fm
 
 # ============================================================================
 # Google Colab
@@ -161,7 +168,9 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
     together = kwargs.get('together', False)
     collate = kwargs.get('collate', False)
     resample = kwargs.get('resample', True)
+    pixel_limit = kwargs.get('pixel_limit', 20000)
     save_meta = kwargs.get('save_meta', True)
+    save_meta_data_on_jpg = kwargs.get('save_meta_data_on_jpg', True)
     cmap = kwargs.get('cmap','gray')
     save_window_jpgs = kwargs.get('save_window_jpgs', False)
 
@@ -173,6 +182,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
     collate = bool(collate)    # convert to boolean
     resample = bool(resample)    # convert to boolean
     save_meta = bool(save_meta)
+    save_meta_data_on_jpg = bool(save_meta_data_on_jpg)
     save_window_jpgs = bool(save_window_jpgs)
 
     jpg_path = os.path.join(save_data_path,'jpg')
@@ -235,6 +245,9 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
             # Extract additional parameters
             additional_params = extract_regulation_parameters_from_mtrx_data(mtrx)
 
+            # Get image time and date
+            date_and_time = mtrx.param.get("BKLT")
+
             # Determine if the scan direction is forward or backward
             if 'forward' in scan_direction_full.lower():
               selected_params = {
@@ -253,6 +266,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
             # Create a metadata dictionary with width, height, angle, scan direction, and selected parameters
             metadata = {
                 'filename': file_name_without_ext,
+                'date_and_time': date_and_time,
                 'width': int(MTRXimg.width * 1e9),
                 'height': int(MTRXimg.height * 1e9),
                 'angle': MTRXimg.angle,
@@ -286,16 +300,22 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
             
             # Here we rescale to a constant pixel density for ML training
             if resample:
-                try:
-                    # Calculate the original pixel density and rescale the image
+                if pixel_density > 0:
+                    try:
+                        # Calculate the original pixel density and rescale the image
+                        pixel_density_orig = px / metadata['width']
+                        img = resample_image_data(img, pixel_density, pixel_density_orig, pixel_limit=pixel_limit, verbose=verbose)
+                    except ZeroDivisionError:
+                        if verbose:
+                            print(f"[{idx}] [{scan_direction_full}] Skipping scan direction '{scanDirection}' for file '{file_name_without_ext}' due to zero width in metadata (division by zero error).")
+                            #print(f"Skipping scan direction {scanDirection} for file {file_name_without_ext} due to zero width in metadata (division by zero error).")
+                        continue  # Skip this image and go to the next
+                elif pixel_density < 0:
+                    scale_factor = abs(pixel_density)
                     pixel_density_orig = px / metadata['width']
-                    img = resample_image_data(img, pixel_density, pixel_density_orig, pixel_limit=20000, verbose=verbose)
-                except ZeroDivisionError:
-                    if verbose:
-                        print(f"[{idx}] [{scan_direction_full}] Skipping scan direction '{scanDirection}' for file '{file_name_without_ext}' due to zero width in metadata (division by zero error).")
-                        #print(f"Skipping scan direction {scanDirection} for file {file_name_without_ext} due to zero width in metadata (division by zero error).")
-                    continue  # Skip this image and go to the next
-            
+                    pixel_density = scale_factor * pixel_density_orig
+                    img = resample_image_data(img, pixel_density, pixel_density_orig, pixel_limit=pixel_limit, verbose=verbose)
+
             # Get the dimensions of the resized image
             py, px = img.shape
 
@@ -358,7 +378,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
                     sys.stdout.flush()
                     sys.stdout.write("j")  # Replace 
                     sys.stdout.flush()
-                save_as_jpg(img, jpg_save_path, cmap=cmap, verbose=verbose)
+                save_as_jpg(img, jpg_save_path, cmap=cmap, verbose=verbose, save_meta_data_on_jpg=save_meta_data_on_jpg, metadata=metadata)
                 
                 # Save the metadata as a text file
                 jpg_txt_save_path = jpg_save_path.replace('.jpg', '.txt')
@@ -768,63 +788,275 @@ def extract_regulation_parameters_from_mtrx_data(mtrx_data):
         return {}
 
 
-def save_as_jpg(img, save_path, cmap='gray', verbose=False):
+# def save_as_jpg(img, save_path, cmap='gray', verbose=False):
+#     """
+#     Save the image data as a JPG file with an optional colormap.
+
+#     Parameters:
+#         img (np.array): 2D numpy array of image data.
+#         save_path (str): Full path where the JPG file will be saved.
+#         cmap (str): Matplotlib colormap name (default is 'gray').
+#         verbose (bool): If True, print out additional information.
+#     """
+#     if img.dtype != np.uint8:
+#         # Scale the float32 image data (assuming range [0, 1]) to uint8 range [0, 255]
+#         img = (img * 255).astype(np.uint8)
+
+#     # Apply the colormap using matplotlib.colormaps
+#     colormap = plt.colormaps[cmap]  # Get the colormap by name
+#     colored_img = colormap(img / 255.0)  # Normalize to [0, 1] for colormap
+#     colored_img = (colored_img[:, :, :3] * 255).astype(np.uint8)  # Convert to RGB and scale to [0, 255]
+
+#     # Create an Image object from the numpy array and save as JPEG
+#     image = Image.fromarray(colored_img)
+#     image.save(save_path, format='JPEG')
+
+#     if verbose:
+#         print('Saved full image as jpg: {}'.format(os.path.basename(save_path)))
+
+
+# import os
+# import numpy as np
+# import matplotlib.pyplot as plt
+# from PIL import Image, ImageDraw, ImageFont
+
+
+def save_as_jpg(img, save_path, cmap='gray', metadata=None,
+                save_meta_data_on_jpg=True, verbose=False):
     """
-    Save the image data as a JPG file with an optional colormap.
+    Save the image data as a JPG file with an optional colormap and metadata panel.
 
     Parameters:
         img (np.array): 2D numpy array of image data.
         save_path (str): Full path where the JPG file will be saved.
         cmap (str): Matplotlib colormap name (default is 'gray').
+        metadata (dict): Optional dict with keys:
+            'filename', 'width', 'height', 'angle',
+            'scan_direction', 'bias', 'bias_unit',
+            'current', 'current_unit'
+        save_meta_data_on_jpg (bool): If True, draw metadata panel.
         verbose (bool): If True, print out additional information.
     """
+    # Ensure img is uint8 in [0, 255]
     if img.dtype != np.uint8:
-        # Scale the float32 image data (assuming range [0, 1]) to uint8 range [0, 255]
+        # Assuming float in [0, 1]
         img = (img * 255).astype(np.uint8)
 
     # Apply the colormap using matplotlib.colormaps
     colormap = plt.colormaps[cmap]  # Get the colormap by name
     colored_img = colormap(img / 255.0)  # Normalize to [0, 1] for colormap
-    colored_img = (colored_img[:, :, :3] * 255).astype(np.uint8)  # Convert to RGB and scale to [0, 255]
+    colored_img = (colored_img[:, :, :3] * 255).astype(np.uint8)  # Convert to RGB uint8
 
-    # Create an Image object from the numpy array and save as JPEG
+    # Flip vertically to match data acquisition orientation
+    colored_img = np.flipud(colored_img)
+    # Create base Image object from the numpy array
     image = Image.fromarray(colored_img)
-    image.save(save_path, format='JPEG')
+
+    # Only try to draw metadata if requested *and* metadata is provided
+    if save_meta_data_on_jpg and metadata is not None:
+        # Safely extract values with defaults
+        filename = metadata.get('filename', 'N/A')
+        bias = metadata.get('bias', None)
+        bias_unit = metadata.get('bias_unit', '')
+        current = metadata.get('current', None)
+        current_unit = metadata.get('current_unit', '')
+        width_nm = metadata.get('width', None)
+        height_nm = metadata.get('height', None)
+        angle_deg = metadata.get('angle', None)
+        scan_direction = metadata.get('scan_direction', None)
+        px, py = image.size
+
+        # --- Parse filename into date_time and image_num ---
+        # Expected format example:
+        # default_2016Mar01-100833_STM-STM_Spectroscopy--1_1_BU
+        # Regex captures:
+        #   1) 2016Mar01-100833
+        #   2) 1_1_BU
+        date_time = filename
+        image_num = None
+
+        m = re.search(r'.*?_(\d{4}[A-Za-z]{3}\d{2}-\d{6}).*--(.+)$', filename)
+        if m:
+            date_time = m.group(1)
+            image_num = m.group(2)
+
+        # Nicely formatted strings
+        def fmt_val(val, unit=''):
+            if val is None:
+                return 'N/A'
+            # Use general format to avoid long floats
+            s = f"{val:g}"
+            return (s + ' ' + unit).strip()
+
+        bias_unit = "V"
+        current_unit = "pA"
+        current = current * 1e12  # Convert A to pA
+
+        bias_str = fmt_val(bias, bias_unit)
+        current_str = fmt_val(current, current_unit)
+        regulation_str = f"{bias_str}, {current_str}"
+        size_str = 'N/A'
+        px_str = "{px} x {py} px".format(px=px, py=py)
+        if (width_nm is not None) and (height_nm is not None):
+            size_str = f"{width_nm:g} nm x {height_nm:g} nm"
+        angle_str = 'N/A'
+        if angle_deg is not None:
+            angle_str = f"{angle_deg:g} degrees"
+        scan_str = f"{size_str}, ({px_str}), {angle_str}"
+        # Build text lines for the panel
+        lines = []
+
+        # date-time (from filename)
+        lines.append(f"{date_time}")
+
+        #  image number/id if we successfully parsed it
+        if image_num is not None:
+            lines.append(f"{image_num} ({scan_direction})")
+
+        # Then the rest of your values
+        lines.extend([
+            # f"{bias_str}",
+            # f"{current_str}",
+            f"{regulation_str}",
+            # f"{px_str}",
+            # f"{size_str}",
+            # f"{angle_str}",
+            f"{scan_str}"
+        ])
+
+
+        # Choose a font (default PIL bitmap font)
+        font = ImageFont.load_default()
+        # font = ImageFont.truetype("DejaVuSans.ttf", size=20)
+        # Choose a font
+
+        # font_path = fm.findfont("DejaVu Sans")  # usually installed with matplotlib
+        # font = ImageFont.truetype(font_path, size=10)
+
+
+        # Estimate panel height from text
+        dummy_img = Image.new("RGB", (10, 10))
+        dummy_draw = ImageDraw.Draw(dummy_img)
+
+        padding_top_bottom = 10
+        padding_left = 10
+        line_spacing = 4
+
+        line_heights = []
+        max_line_width = 0
+        for line in lines:
+            bbox = dummy_draw.textbbox((0, 0), line, font=font)
+            w = bbox[2] - bbox[0]
+            h = bbox[3] - bbox[1]
+            line_heights.append(h)
+            max_line_width = max(max_line_width, w)
+
+        text_height = sum(line_heights) + line_spacing * (len(lines) - 1)
+        panel_height = text_height + 2 * padding_top_bottom
+
+        # Make sure panel is at least some minimal height
+        panel_height = max(panel_height, 60)
+
+        # Create new image with extra space for the panel
+        new_width = image.width
+        new_height = image.height + panel_height
+        new_image = Image.new("RGB", (new_width, new_height), color=(255, 255, 255))
+
+        # Paste original image at the top
+        new_image.paste(image, (0, 0))
+
+        # Draw a subtle panel background (e.g., light gray)
+        draw = ImageDraw.Draw(new_image)
+        panel_top = image.height
+        draw.rectangle(
+            [0, panel_top, new_width, new_height],
+            fill=(240, 240, 240)
+        )
+
+        # Draw text lines
+        y = panel_top + padding_top_bottom
+        for i, line in enumerate(lines):
+            draw.text((padding_left, y), line, fill=(0, 0, 0), font=font)
+            y += line_heights[i] + line_spacing
+
+        # Replace image with the panel-augmented one for saving
+        image = new_image
+
+    # Save as JPEG
+    # image.save(save_path, format='JPEG')
+
+    image.save(
+        save_path,
+        format="JPEG",
+        quality=95,      # high quality
+        subsampling=0     # disables chroma subsampling → sharp text
+    )
+
 
     if verbose:
         print('Saved full image as jpg: {}'.format(os.path.basename(save_path)))
 
-        
+
+
 def save_metadata(metadata, save_path):
-    """
-    Save the image metadata (including width, height, angle, scan direction, bias, and current) to a text file.
 
-    Parameters:
-        metadata (dict): Dictionary containing metadata keys such as 'width', 'height', 'angle',
-                         'scan_direction', 'bias', 'bias_unit', 'current', 'current_unit'.
-        save_path (str): Full path where the text file will be saved, with '.txt' extension.
-    """
-    with open(save_path, 'w') as file:
-        # Define the width for the columns
-        col_width_key = 15
-        col_width_value = 20
-        col_width_unit = 12
+    col_width_key = 15
+    col_width_value = 20
+    col_width_unit = 12
 
-        # Save scan direction if present
-        if 'scan_direction' in metadata:
-            file.write(f"{'scan_direction'.ljust(col_width_key)}{metadata['scan_direction'].rjust(col_width_value)}\n")
+    line = f"{{:<{col_width_key}}}{{:>{col_width_value}}}{{:>{col_width_unit}}}\n"
+    line_no_unit = f"{{:<{col_width_key}}}{{:>{col_width_value}}}\n"
 
-        # Write each line with formatted spacing and units
-        file.write(f"{'width'.ljust(col_width_key)}{str(metadata.get('width', '')).rjust(col_width_value)}{'nm'.rjust(col_width_unit)}\n")
-        file.write(f"{'height'.ljust(col_width_key)}{str(metadata.get('height', '')).rjust(col_width_value)}{'nm'.rjust(col_width_unit)}\n")
-        file.write(f"{'angle'.ljust(col_width_key)}{str(metadata.get('angle', '')).rjust(col_width_value)}{'degrees'.rjust(col_width_unit)}\n")
+    with open(save_path, "w") as file:
 
-        # Optionally save bias and current if they are present
-        if 'bias' in metadata and 'bias_unit' in metadata:
-            file.write(f"{'bias'.ljust(col_width_key)}{str(metadata['bias']).rjust(col_width_value)}{metadata['bias_unit'].rjust(col_width_unit)}\n")
+        if "date_and_time" in metadata:
+            file.write(line_no_unit.format("date_time", metadata["date_and_time"]))
 
-        if 'current' in metadata and 'current_unit' in metadata:
-            file.write(f"{'current'.ljust(col_width_key)}{str(metadata['current']).rjust(col_width_value)}{metadata['current_unit'].rjust(col_width_unit)}\n")
+        if "scan_direction" in metadata:
+            file.write(line_no_unit.format("scan_direction", metadata["scan_direction"]))
+
+        file.write(line.format("width", metadata.get("width", ""), "nm"))
+        file.write(line.format("height", metadata.get("height", ""), "nm"))
+        file.write(line.format("angle", metadata.get("angle", ""), "degrees"))
+
+        if "bias" in metadata and "bias_unit" in metadata:
+            file.write(line.format("bias", metadata["bias"], metadata["bias_unit"]))
+
+        if "current" in metadata and "current_unit" in metadata:
+            file.write(line.format("current", metadata["current"], metadata["current_unit"]))       
+# def save_metadata(metadata, save_path):
+#     """
+#     Save the image metadata (including width, height, angle, scan direction, bias, and current) to a text file.
+
+#     Parameters:
+#         metadata (dict): Dictionary containing metadata keys such as 'width', 'height', 'angle',
+#                          'scan_direction', 'bias', 'bias_unit', 'current', 'current_unit'.
+#         save_path (str): Full path where the text file will be saved, with '.txt' extension.
+#     """
+#     with open(save_path, 'w') as file:
+#         # Define the width for the columns
+#         col_width_key = 15
+#         col_width_value = 20
+#         col_width_unit = 12
+
+#         if 'date_and_time' in metadata:
+#             file.write(f"{'Image date and time:'.ljust(col_width_key)}{metadata['date_and_time'].rjust(col_width_value)}\n")
+
+#         # Save scan direction if present
+#         if 'scan_direction' in metadata:
+#             file.write(f"{'scan_direction'.ljust(col_width_key)}{metadata['scan_direction'].rjust(col_width_value)}\n")
+
+#         # Write each line with formatted spacing and units
+#         file.write(f"{'width'.ljust(col_width_key)}{str(metadata.get('width', '')).rjust(col_width_value)}{'nm'.rjust(col_width_unit)}\n")
+#         file.write(f"{'height'.ljust(col_width_key)}{str(metadata.get('height', '')).rjust(col_width_value)}{'nm'.rjust(col_width_unit)}\n")
+#         file.write(f"{'angle'.ljust(col_width_key)}{str(metadata.get('angle', '')).rjust(col_width_value)}{'degrees'.rjust(col_width_unit)}\n")
+
+#         # Optionally save bias and current if they are present
+#         if 'bias' in metadata and 'bias_unit' in metadata:
+#             file.write(f"{'bias'.ljust(col_width_key)}{str(metadata['bias']).rjust(col_width_value)}{metadata['bias_unit'].rjust(col_width_unit)}\n")
+
+#         if 'current' in metadata and 'current_unit' in metadata:
+#             file.write(f"{'current'.ljust(col_width_key)}{str(metadata['current']).rjust(col_width_value)}{metadata['current_unit'].rjust(col_width_unit)}\n")
 
 
 def extract_image_windows(image, px=128, pitch=128):
