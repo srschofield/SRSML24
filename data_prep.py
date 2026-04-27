@@ -446,6 +446,95 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
     print("Conversion complete.")
     print("********************\n")
 
+
+
+
+
+def load_image_for_processing(mtrx_path):
+
+    scan_direction_map = {
+        "forward/up":    "FU",
+        "backward/up":   "BU",
+        "forward/down":  "FD",
+        "backward/down": "BD",
+    }
+
+    results  = {"FU": None, "BU": None, "FD": None, "BD": None}
+    metadata = {}
+
+    imgAll, _ = load_mtrx_data(mtrx_path)
+
+    if imgAll is None:
+        print(f"Warning: Could not load data from {mtrx_path}")
+        return None, None, None, None, {}
+
+    file_name_without_ext = os.path.splitext(os.path.basename(mtrx_path))[0]
+    additional_params = extract_regulation_parameters_from_mtrx_data(mtrx)
+    date_and_time = mtrx.param.get("BKLT")
+
+    for scanDirection in imgAll:                              # iterate keys as original does
+        try:
+            MTRXimg, _ = mtrx.select_image(imgAll[scanDirection])
+            scan_direction_full = imgAll[scanDirection]       # value is the direction string
+            abbrev = scan_direction_map.get(scan_direction_full)
+        except Exception as e:
+            print(f"Warning: Could not select image for key '{scanDirection}': {e}")
+            continue
+
+        if abbrev is None:
+            print(f"Warning: Unrecognised scan direction '{scan_direction_full}', skipping.")
+            continue
+
+        results[abbrev] = MTRXimg
+
+        is_forward = "forward" in scan_direction_full.lower()
+        selected_params = {
+            "bias":          additional_params.get("bias_forward"        if is_forward else "bias_backward"),
+            "bias_unit":     additional_params.get("bias_forward_unit"   if is_forward else "bias_backward_unit"),
+            "current":       additional_params.get("current_forward"     if is_forward else "current_backward"),
+            "current_unit":  additional_params.get("current_forward_unit" if is_forward else "current_backward_unit"),
+        }
+
+        metadata[abbrev] = {
+            "filename":      file_name_without_ext,
+            "date_and_time": date_and_time,
+            "width":         int(MTRXimg.width * 1e9),
+            "height":        int(MTRXimg.height * 1e9),
+            "angle":         MTRXimg.angle,
+            "scan_direction": scan_direction_full,
+            **selected_params,
+        }
+
+    found   = [ab for ab, img in results.items() if img is not None]
+    missing = [ab for ab, img in results.items() if img is None]
+    has_down = any(ab in found for ab in ("FD", "BD"))
+
+    print(f"'{file_name_without_ext}' — {len(found)} scan directions loaded: {', '.join(found)}")
+
+    return results["FU"].data if results["FU"] is not None else None, \
+       results["BU"].data if results["BU"] is not None else None, \
+       results["FD"].data if results["FD"] is not None else None, \
+       results["BD"].data if results["BD"] is not None else None, \
+       metadata
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # ============================================================================
 # File IO
 # ============================================================================
@@ -1616,3 +1705,13 @@ def save_feature_windows_coords_and_labels(windows, coords, labels, save_dir, ba
     np.savetxt(coordinates_path, coords_labels, header=header, comments='')
     if verbose:
         print(f'Saved coordinates to {coordinates_path}\n')
+
+
+def display_image(img, title=None, cmap='gray', figsize=(6, 6)):
+    plt.figure(figsize=figsize)
+    plt.imshow(img, cmap=cmap, origin='lower')
+    if title:
+        plt.title(title)
+    plt.axis('off')
+    plt.tight_layout()
+    plt.show()
