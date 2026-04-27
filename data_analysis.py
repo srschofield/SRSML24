@@ -39,11 +39,11 @@ import random
 
 import matplotlib.pyplot as plt
 
-from datetime import datetime
 
 from concurrent.futures import ThreadPoolExecutor
 
 from scipy.signal import savgol_filter
+from scipy.optimize import curve_fit
 
 from PIL import Image, ImageDraw, ImageFont
 
@@ -53,19 +53,402 @@ import matplotlib.font_manager as fm
 
 
 
-def radial_profile(img, center, cmap='gist_heat'):
+def pixel_size_from_metadata(img, metadata, direction='FU'):
+    """
+    Compute the physical pixel size (nm/pixel) from MTRX scan metadata.
+
+    Parameters
+    ----------
+    img       : 2D np.array  — the loaded image array
+    metadata  : dict         — returned by dp.load_image_for_processing()
+    direction : str          — scan direction key, e.g. 'FU', 'BU', 'FD', 'BD'
+
+    Returns
+    -------
+    pixel_size : float  — nm per pixel (x-axis; assumes square pixels)
+    """
+    m = metadata[direction]
+    nx = img.shape[1]
+    width_nm = m['width']
+    if width_nm == 0:
+        raise ValueError(
+            f"metadata['{direction}']['width'] is 0 — scan width could not be "
+            "read from the MTRX file.")
+    pixel_size = width_nm / nx
+    print(f"pixel_size_from_metadata: {width_nm} nm / {nx} px = {pixel_size:.4f} nm/px")
+    return pixel_size
+
+
+def pick_and_profile(img, cmap='gist_heat', pixel_size=None):
+    """
+    Display an image and compute a radial profile from a clicked centre point.
+
+    Click anywhere on the left panel to choose the centre; the right panel
+    updates immediately.  Click again to move the centre.  Arrow keys nudge
+    the centre by one pixel.
+
+    Requires ``%matplotlib widget`` (ipympl) in the calling notebook cell.
+
+    Parameters
+    ----------
+    img        : 2D np.array
+    cmap       : str
+    pixel_size : float or None
+        Physical size of one pixel in nm.  When provided the profile x-axis
+        is shown in nm; otherwise in pixels.
+
+    Returns
+    -------
+    result : dict with keys 'center', 'radii', 'profile'
+        'radii' are in nm when pixel_size is given, otherwise pixels.
+        Values are None until the first click, then updated on each click.
+    """
+    print("pick_and_profile ready.")
+    print("  Click the image to set the centre point.")
+    print("  Arrow keys nudge the centre by 1 pixel.")
+    print("  Press 's' to save the current profile.")
+    print("  Profiles accumulate in result['saved'].")
+    print("  When done: radii, profiles = da.stack_profiles(result['saved'])")
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    # Prevent matplotlib's default 's' → save-figure dialog
+    _keymap_save = plt.rcParams['keymap.save'][:]
+    plt.rcParams['keymap.save'] = [k for k in _keymap_save if k != 's']
+
+    def _restore_keymaps(_):
+        plt.rcParams['keymap.save'][:] = _keymap_save
+    fig.canvas.mpl_connect('close_event', _restore_keymaps)
+
+    axes[0].imshow(img, cmap=cmap, origin='lower')
+    axes[0].set_title('Click to select centre')
+    axes[0].axis('off')
+
+    r_label = 'Radius (nm)' if pixel_size is not None else 'Radius (px)'
+    axes[1].set_xlabel(r_label)
+    axes[1].set_ylabel('Mean intensity')
+    axes[1].set_title('Radial profile')
+    plt.tight_layout()
+
+    result = {'center': None, 'radii': None, 'profile': None, 'saved': []}
+
+    ny, nx = img.shape
+    xx, yy = np.meshgrid(np.arange(nx), np.arange(ny))
+
+    def _update(cx, cy):
+        max_radius = min(cx, cy, nx - cx, ny - cy)
+        if max_radius < 1:
+            return
+
+        r = np.sqrt((xx - cx)**2 + (yy - cy)**2).astype(int)
+        radii = np.arange(0, max_radius)
+        profile = np.array([img[r == rad].mean() for rad in radii])
+        plot_radii = radii * pixel_size if pixel_size is not None else radii
+        result.update(center=(cx, cy), radii=plot_radii, profile=profile)
+
+        n_saved = len(result['saved'])
+        save_hint = f'  [{n_saved} saved]' if n_saved else '  [s = save]'
+
+        axes[0].clear()
+        axes[0].imshow(img, cmap=cmap, origin='lower')
+        for i, s in enumerate(result['saved']):
+            sx, sy = s['center']
+            axes[0].plot(sx, sy, 'c+', markersize=10, markeredgewidth=1.5)
+            axes[0].annotate(str(i + 1), (sx, sy),
+                             xytext=(4, 4), textcoords='offset points',
+                             color='cyan', fontsize=9, fontweight='bold')
+        axes[0].plot(cx, cy, 'w+', markersize=12, markeredgewidth=2)
+        axes[0].add_patch(plt.Circle((cx, cy), max_radius, color='white',
+                                     fill=False, linewidth=1, linestyle='--'))
+        axes[0].set_title(f'Centre: ({cx}, {cy}){save_hint}')
+        axes[0].axis('off')
+
+        axes[1].clear()
+        for i, s in enumerate(result['saved']):
+            axes[1].plot(s['radii'], s['profile'], alpha=0.4,
+                         label=str(i + 1))
+        axes[1].plot(plot_radii, profile)
+        axes[1].set_xlabel(r_label)
+        axes[1].set_ylabel('Mean intensity')
+        axes[1].set_title('Radial profile')
+        if result['saved']:
+            axes[1].legend(title='#', fontsize=8)
+        fig.canvas.draw_idle()
+
+    def _save():
+        if result['center'] is None:
+            return
+        entry = {'center': result['center'],
+                 'radii':  result['radii'].copy(),
+                 'profile': result['profile'].copy()}
+        result['saved'].append(entry)
+        n = len(result['saved'])
+        cx, cy = result['center']
+        print(f"Saved profile {n}: centre ({cx}, {cy}), "
+              f"{len(result['radii'])} points")
+        _update(cx, cy)
+
+    def on_click(event):
+        if event.inaxes is not axes[0]:
+            return
+        _update(int(round(event.xdata)), int(round(event.ydata)))
+
+    _arrow = {'left': (-1, 0), 'right': (1, 0), 'up': (0, 1), 'down': (0, -1)}
+
+    def on_key(event):
+        if result['center'] is None:
+            return
+        if event.key in _arrow:
+            cx, cy = result['center']
+            dx, dy = _arrow[event.key]
+            _update(cx + dx, cy + dy)
+        elif event.key == 's':
+            _save()
+
+    fig.canvas.mpl_connect('button_press_event', on_click)
+    fig.canvas.mpl_connect('key_press_event', on_key)
+    plt.show()
+    return result
+
+
+def _refine_center_gaussian(img, cx, cy, search_radius=20):
+    """
+    Refine a click position to the centre of the nearest protrusion by fitting
+    a 2D Gaussian to a local crop.  Falls back to the local maximum if the fit
+    fails or produces an out-of-bounds result.
+
+    Returns refined (cx, cy) in image pixel coordinates.
+    """
+    ny, nx = img.shape
+    r = search_radius
+    x0, x1 = max(0, cx - r), min(nx, cx + r + 1)
+    y0, y1 = max(0, cy - r), min(ny, cy + r + 1)
+    crop = img[y0:y1, x0:x1]
+    ch, cw = crop.shape
+
+    xg, yg = np.arange(cw), np.arange(ch)
+    xx, yy = np.meshgrid(xg, yg)
+
+    def gaussian_2d(xy, amp, gx, gy, sx, sy, bg):
+        x, y = xy
+        return (bg + amp * np.exp(
+            -((x - gx)**2 / (2 * sx**2) + (y - gy)**2 / (2 * sy**2))
+        )).ravel()
+
+    bg_est = crop.min()
+    amp_est = crop.max() - bg_est
+    p0 = [amp_est, cw / 2, ch / 2, cw / 4, ch / 4, bg_est]
+    bounds = ([0, 0, 0, 0.5, 0.5, -np.inf],
+              [np.inf, cw, ch, cw, ch, np.inf])
+
+    try:
+        popt, _ = curve_fit(gaussian_2d, (xx.ravel(), yy.ravel()),
+                            crop.ravel(), p0=p0, bounds=bounds, maxfev=2000)
+        refined_cx = int(round(x0 + popt[1]))
+        refined_cy = int(round(y0 + popt[2]))
+        if 0 <= refined_cx < nx and 0 <= refined_cy < ny:
+            return refined_cx, refined_cy
+    except Exception:
+        pass
+
+    peak = np.unravel_index(crop.argmax(), crop.shape)
+    return int(x0 + peak[1]), int(y0 + peak[0])
+
+
+def pick_and_profile_auto(img, cmap='gist_heat', search_radius=20, pixel_size=None):
+    """
+    Like pick_and_profile, but refines the clicked position to the centre of
+    the nearest protrusion using a 2D Gaussian fit on a local crop.
+
+    Click near a protrusion; the centre is refined automatically and the radial
+    profile is computed from the fitted position.  Click again to move.  Arrow
+    keys nudge the centre by one pixel.
+
+    Requires ``%matplotlib widget`` (ipympl) in the calling notebook cell.
+
+    Parameters
+    ----------
+    img           : 2D np.array
+    cmap          : str
+    search_radius : int    — half-width of the local crop for the Gaussian fit,
+                            in pixels (default 20)
+    pixel_size    : float or None
+        Physical size of one pixel in nm.  When provided the profile x-axis
+        is shown in nm; otherwise in pixels.
+
+    Returns
+    -------
+    result : dict with keys 'click', 'center', 'radii', 'profile'
+        'click'  — raw pixel coordinates of the mouse click
+        'center' — refined centre from the Gaussian fit (or local max fallback)
+        'radii'  — in nm when pixel_size is given, otherwise pixels
+        'profile' — mean intensity at each radius
+    """
+    print("pick_and_profile_auto ready.")
+    print("  Click near a protrusion — centre is refined automatically.")
+    print("  Arrow keys nudge the centre by 1 pixel.")
+    print("  Press 's' to save the current profile.")
+    print("  Profiles accumulate in result['saved'].")
+    print("  When done: radii, profiles = da.stack_profiles(result['saved'])")
+
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    # Prevent matplotlib's default 's' → save-figure dialog
+    _keymap_save = plt.rcParams['keymap.save'][:]
+    plt.rcParams['keymap.save'] = [k for k in _keymap_save if k != 's']
+
+    def _restore_keymaps(_):
+        plt.rcParams['keymap.save'][:] = _keymap_save
+    fig.canvas.mpl_connect('close_event', _restore_keymaps)
+
+    axes[0].imshow(img, cmap=cmap, origin='lower')
+    axes[0].set_title('Click near a protrusion')
+    axes[0].axis('off')
+
+    r_label = 'Radius (nm)' if pixel_size is not None else 'Radius (px)'
+    axes[1].set_xlabel(r_label)
+    axes[1].set_ylabel('Mean intensity')
+    axes[1].set_title('Radial profile')
+    plt.tight_layout()
+
+    result = {'click': None, 'center': None, 'radii': None, 'profile': None,
+              'saved': []}
+
+    ny, nx = img.shape
+    xx, yy = np.meshgrid(np.arange(nx), np.arange(ny))
+
+    def _update(cx, cy):
+        max_radius = min(cx, cy, nx - cx, ny - cy)
+        if max_radius < 1:
+            return
+
+        r = np.sqrt((xx - cx)**2 + (yy - cy)**2).astype(int)
+        radii = np.arange(0, max_radius)
+        profile = np.array([img[r == rad].mean() for rad in radii])
+        plot_radii = radii * pixel_size if pixel_size is not None else radii
+        result.update(center=(cx, cy), radii=plot_radii, profile=profile)
+
+        click_cx, click_cy = result['click'] or (cx, cy)
+        offset = (cx - click_cx, cy - click_cy)
+        n_saved = len(result['saved'])
+        save_hint = f'  [{n_saved} saved]' if n_saved else '  [s = save]'
+
+        axes[0].clear()
+        axes[0].imshow(img, cmap=cmap, origin='lower')
+        for i, s in enumerate(result['saved']):
+            sx, sy = s['center']
+            axes[0].plot(sx, sy, 'c+', markersize=10, markeredgewidth=1.5)
+            axes[0].annotate(str(i + 1), (sx, sy),
+                             xytext=(4, 4), textcoords='offset points',
+                             color='cyan', fontsize=9, fontweight='bold')
+        if result['click'] and result['click'] != (cx, cy):
+            axes[0].plot(click_cx, click_cy, 'w+', markersize=10,
+                         markeredgewidth=1, alpha=0.5)
+        axes[0].plot(cx, cy, 'w+', markersize=12, markeredgewidth=2)
+        axes[0].add_patch(plt.Circle((cx, cy), max_radius, color='white',
+                                     fill=False, linewidth=1, linestyle='--'))
+        axes[0].set_title(
+            f'Centre: ({cx}, {cy})  |  offset: {offset}{save_hint}')
+        axes[0].axis('off')
+
+        axes[1].clear()
+        for i, s in enumerate(result['saved']):
+            axes[1].plot(s['radii'], s['profile'], alpha=0.4,
+                         label=str(i + 1))
+        axes[1].plot(plot_radii, profile)
+        axes[1].set_xlabel(r_label)
+        axes[1].set_ylabel('Mean intensity')
+        axes[1].set_title('Radial profile')
+        if result['saved']:
+            axes[1].legend(title='#', fontsize=8)
+        fig.canvas.draw_idle()
+
+    def _save():
+        if result['center'] is None:
+            return
+        entry = {'center': result['center'],
+                 'radii':  result['radii'].copy(),
+                 'profile': result['profile'].copy()}
+        result['saved'].append(entry)
+        n = len(result['saved'])
+        cx, cy = result['center']
+        print(f"Saved profile {n}: centre ({cx}, {cy}), "
+              f"{len(result['radii'])} points")
+        _update(cx, cy)
+
+    def on_click(event):
+        if event.inaxes is not axes[0]:
+            return
+        click_cx, click_cy = int(round(event.xdata)), int(round(event.ydata))
+        cx, cy = _refine_center_gaussian(img, click_cx, click_cy, search_radius)
+        result['click'] = (click_cx, click_cy)
+        _update(cx, cy)
+
+    _arrow = {'left': (-1, 0), 'right': (1, 0), 'up': (0, 1), 'down': (0, -1)}
+
+    def on_key(event):
+        if result['center'] is None:
+            return
+        if event.key in _arrow:
+            cx, cy = result['center']
+            dx, dy = _arrow[event.key]
+            _update(cx + dx, cy + dy)
+        elif event.key == 's':
+            _save()
+
+    fig.canvas.mpl_connect('button_press_event', on_click)
+    fig.canvas.mpl_connect('key_press_event', on_key)
+    plt.show()
+    return result
+
+
+def stack_profiles(saved):
+    """
+    Stack a list of saved radial profiles into padded 2D numpy arrays.
+
+    Profiles from different centre points may have different lengths.  Shorter
+    profiles are padded with NaN so all rows have the same length.
+
+    Parameters
+    ----------
+    saved : list of dicts
+        Each dict must have keys 'radii' and 'profile' (as returned in
+        result['saved'] by pick_and_profile / pick_and_profile_auto).
+
+    Returns
+    -------
+    radii    : np.ndarray, shape (n, max_len)  — NaN-padded radii
+    profiles : np.ndarray, shape (n, max_len)  — NaN-padded intensities
+    """
+    if not saved:
+        return np.array([]), np.array([])
+    n = len(saved)
+    max_len = max(len(s['radii']) for s in saved)
+    radii    = np.full((n, max_len), np.nan)
+    profiles = np.full((n, max_len), np.nan)
+    for i, s in enumerate(saved):
+        L = len(s['radii'])
+        radii[i, :L]    = s['radii']
+        profiles[i, :L] = s['profile']
+    return radii, profiles
+
+
+def radial_profile(img, center, cmap='gist_heat', pixel_size=None):
     """
     Compute and display a radially averaged profile from a given centre point.
 
     Parameters
     ----------
-    img : 2D np.array
-    center : tuple (x, y) in pixel coordinates
-    cmap : str
-    
+    img        : 2D np.array
+    center     : tuple (x, y) in pixel coordinates
+    cmap       : str
+    pixel_size : float or None
+        Physical size of one pixel in nm.  When provided the profile x-axis
+        is shown in nm; otherwise in pixels.
+
     Returns
     -------
-    radii : np.array    radial distances in pixels
+    radii   : np.array  radial distances in nm (or pixels if pixel_size is None)
     profile : np.array  mean intensity at each radius
     """
     cx, cy = center
@@ -77,21 +460,22 @@ def radial_profile(img, center, cmap='gist_heat'):
     max_radius = min(cx, cy, nx - cx, ny - cy)
     radii = np.arange(0, max_radius)
     profile = np.array([img[r == rad].mean() for rad in radii])
+    plot_radii = radii * pixel_size if pixel_size is not None else radii
 
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
 
     axes[0].imshow(img, cmap=cmap, origin='lower')
     axes[0].plot(cx, cy, 'w+', markersize=12, markeredgewidth=2)
-    axes[0].add_patch(plt.Circle((cx, cy), max_radius, color='white', fill=False, 
+    axes[0].add_patch(plt.Circle((cx, cy), max_radius, color='white', fill=False,
                                   linewidth=1, linestyle='--'))
     axes[0].set_title(f'Centre: ({cx}, {cy})')
     axes[0].axis('off')
 
-    axes[1].plot(radii, profile)
-    axes[1].set_xlabel('Radius (px)')
+    axes[1].plot(plot_radii, profile)
+    axes[1].set_xlabel('Radius (nm)' if pixel_size is not None else 'Radius (px)')
     axes[1].set_ylabel('Mean intensity')
     axes[1].set_title('Radial profile')
     plt.tight_layout()
     plt.show()
 
-    return radii, profile
+    return plot_radii, profile
