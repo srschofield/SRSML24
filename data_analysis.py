@@ -433,6 +433,58 @@ def stack_profiles(saved):
     return radii, profiles
 
 
+def plot_profiles(radii, profiles, pixel_size=None, title='Radial profiles',
+                  show_mean=True):
+    """
+    Plot a set of stacked radial profiles as returned by stack_profiles().
+
+    Parameters
+    ----------
+    radii      : np.ndarray, shape (n, max_len)  — from stack_profiles()
+    profiles   : np.ndarray, shape (n, max_len)  — from stack_profiles()
+    pixel_size : float or None
+        Pass only if radii are still in pixels and you want to convert to nm
+        here.  If pixel_size was already supplied when picking, leave as None.
+    title      : str
+    show_mean  : bool
+        Overlay the NaN-aware mean ± std across all profiles (default True).
+        At large radii where few profiles contribute, the shaded band widens
+        naturally to reflect the reduced sample.
+
+    Returns
+    -------
+    fig, ax
+    """
+    radii    = np.atleast_2d(radii)
+    profiles = np.atleast_2d(profiles)
+
+    if pixel_size is not None:
+        radii = radii * pixel_size
+        r_label = 'Radius (nm)'
+    else:
+        r_label = 'Radius (nm)' if np.nanmax(radii) < 50 else 'Radius (px)'
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    for i, (r_row, p_row) in enumerate(zip(radii, profiles)):
+        ax.plot(r_row, p_row, alpha=0.4, label=str(i + 1))
+
+    if show_mean and len(profiles) > 1:
+        r_mean = np.nanmean(radii, axis=0)
+        p_mean = np.nanmean(profiles, axis=0)
+        p_std  = np.nanstd(profiles, axis=0)
+        ax.plot(r_mean, p_mean, color='black', linewidth=2, label='mean')
+        ax.fill_between(r_mean, p_mean - p_std, p_mean + p_std,
+                        color='black', alpha=0.15, label='±1 std')
+
+    ax.set_xlabel(r_label)
+    ax.set_ylabel('Mean intensity')
+    ax.set_title(title)
+    ax.legend(title='#', fontsize=8)
+    plt.tight_layout()
+    plt.show()
+    return fig, ax
+
+
 def radial_profile(img, center, cmap='gist_heat', pixel_size=None):
     """
     Compute and display a radially averaged profile from a given centre point.
