@@ -15,6 +15,9 @@ Created October 2024
 
 Modules:
     - data_prep
+    - data_analysis
+    - model
+    - utils
 """
 
 # The following "import" statements import the modules from the current package
@@ -23,6 +26,7 @@ Modules:
 # the current package'.
 
 from . import data_prep
+from . import data_analysis
 from . import model
 from . import utils
 
