@@ -161,7 +161,7 @@ def process_mtrx_files(mtrx_paths, save_data_path, **kwargs):
     pixel_ratio = kwargs.get('pixel_ratio', 0.5)
     data_scaling = kwargs.get('data_scaling', 2e9)
     window_size = kwargs.get('window_size', 32)
-    window_pitch = kwargs.get('window_pitch', 32)
+    window_pitch = kwargs.get('window_pitch', 16)
     save_windows = kwargs.get('save_windows', True)
     save_jpg = kwargs.get('save_jpg', False)
     verbose = kwargs.get('verbose', False)
@@ -857,7 +857,6 @@ def save_as_jpg(img, save_path, cmap='gray', metadata=None,
         # Safely extract values with defaults
         filename = metadata.get('filename', 'N/A')
         date_and_time = metadata.get('date_and_time', 'N/A')
-        print(date_and_time)
         bias = metadata.get('bias', None)
         bias_unit = metadata.get('bias_unit', '')
         current = metadata.get('current', None)
