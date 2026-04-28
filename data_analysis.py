@@ -496,6 +496,110 @@ def plot_profiles(radii, profiles, pixel_size=None, title='Radial profiles',
     return fig, ax
 
 
+def save_profiles(radii, profiles, filepath=None, filename=None):
+    """
+    Save stacked radial profiles to a tab-delimited text file.
+
+    The file has a single shared radius column followed by one column per
+    individual profile, then mean and std columns.  Profiles shorter than the
+    longest are left blank beyond their last point.  Three ``#``-prefixed
+    comment lines precede the column-header row so that all of Excel, Origin,
+    Igor Pro, MATLAB, and Python can import the file with minimal configuration.
+
+    Parameters
+    ----------
+    radii    : np.ndarray, shape (n, max_len)  — from stack_profiles()
+    profiles : np.ndarray, shape (n, max_len)  — from stack_profiles()
+    filepath : str or None
+        Either a directory path or a complete file path.
+        - Directory path (or None): the file is placed there; the name comes
+          from ``filename`` or is auto-generated with a timestamp.
+        - Complete file path (has a file extension / is not an existing
+          directory): used as-is; ``filename`` is ignored.
+    filename : str or None
+        Just the filename (e.g. ``'my_data.txt'``).  Used when ``filepath``
+        is a directory or None.  If also None, an inline prompt asks for a
+        name; pressing Enter accepts a timestamped default.
+
+    Returns
+    -------
+    save_path : str  — absolute path actually written.
+
+    Notes
+    -----
+    Import hints:
+      Python  : ``pd.read_csv(path, sep='\\t', comment='#')``
+      MATLAB  : ``readtable(path, 'FileType','text', 'Delimiter','\\t', 'CommentStyle','#')``
+      Igor Pro: Data > Load Waves > General Text (skip lines starting with #)
+      Origin  : Import > Single ASCII, set comment character to #
+      Excel   : Data > From Text/CSV, delimiter = Tab
+    """
+    import datetime
+
+    radii    = np.atleast_2d(radii)
+    profiles = np.atleast_2d(profiles)
+    n, max_len = profiles.shape
+
+    lengths = [int(np.sum(~np.isnan(p))) for p in profiles]
+    min_len = min(lengths)
+    longest_idx = int(np.argmax(lengths))
+
+    r_shared = radii[longest_idx].copy()
+
+    r_mean = np.nanmean(radii[:, :min_len],    axis=0)
+    p_mean = np.nanmean(profiles[:, :min_len], axis=0)
+    p_std  = np.nanstd( profiles[:, :min_len], axis=0)
+
+    # Resolve save_path from filepath + filename
+    if filepath is not None and not os.path.isdir(filepath):
+        # Treat as a complete file path; filename is ignored
+        save_path = filepath
+    else:
+        # filepath is None or a directory
+        save_dir = filepath if filepath is not None else os.getcwd()
+        if filename is None:
+            default_name = ('radial_profiles_'
+                            + datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
+                            + '.txt')
+            try:
+                response = input(f'Filename [{default_name}]: ').strip()
+            except EOFError:
+                response = ''
+            filename = response if response else default_name
+            if not response:
+                print(f"No name given — using default: {filename}")
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, filename)
+
+    timestamp = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    col_names = (['radius']
+                 + [f'profile_{i + 1}' for i in range(n)]
+                 + ['mean', 'std'])
+
+    def _fmt(v):
+        return '' if np.isnan(v) else f'{v:.6g}'
+
+    with open(save_path, 'w') as f:
+        f.write(f'# Radial profiles  |  saved: {timestamp}\n')
+        f.write(f'# n_profiles: {n}  |  max_length: {max_len}'
+                f'  |  mean_std_length: {min_len}\n')
+        f.write('# blank cells = profile did not extend to this radius\n')
+        f.write('\t'.join(col_names) + '\n')
+        for k in range(max_len):
+            row = [_fmt(r_shared[k])]
+            for i in range(n):
+                row.append(_fmt(profiles[i, k]))
+            row.append(_fmt(p_mean[k]) if k < min_len else '')
+            row.append(_fmt(p_std[k])  if k < min_len else '')
+            f.write('\t'.join(row) + '\n')
+
+    abs_path = os.path.abspath(save_path)
+    print(f"Saved {n} profiles ({max_len} rows)")
+    print(f"  Directory : {os.path.dirname(abs_path)}")
+    print(f"  File      : {os.path.basename(abs_path)}")
+    return abs_path
+
+
 def radial_profile(img, center, cmap='gist_heat', pixel_size=None):
     """
     Compute and display a radially averaged profile from a given centre point.
