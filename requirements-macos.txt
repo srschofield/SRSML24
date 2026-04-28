@@ -11,6 +11,7 @@ scipy
 opencv-python
 Pillow
 joblib
+natsort
 
 # Jupyter notebook support
 jupyter

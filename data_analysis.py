@@ -404,7 +404,7 @@ def pick_and_profile_auto(img, cmap='gist_heat', search_radius=20, pixel_size=No
 
 def stack_profiles(saved):
     """
-    Stack a list of saved radial profiles into padded 2D numpy arrays.
+    Stack a list of saved radial profiles into NaN-padded 2D numpy arrays.
 
     Profiles from different centre points may have different lengths.  Shorter
     profiles are padded with NaN so all rows have the same length.
@@ -434,7 +434,7 @@ def stack_profiles(saved):
 
 
 def plot_profiles(radii, profiles, pixel_size=None, title='Radial profiles',
-                  show_mean=True):
+                  show_mean=True, crop=True):
     """
     Plot a set of stacked radial profiles as returned by stack_profiles().
 
@@ -447,9 +447,13 @@ def plot_profiles(radii, profiles, pixel_size=None, title='Radial profiles',
         here.  If pixel_size was already supplied when picking, leave as None.
     title      : str
     show_mean  : bool
-        Overlay the NaN-aware mean ± std across all profiles (default True).
-        At large radii where few profiles contribute, the shaded band widens
-        naturally to reflect the reduced sample.
+        Overlay the mean ± std across all profiles (default True).
+    crop : bool, optional
+        When True (default) the mean and ±1 std band are computed and plotted
+        only up to the length of the shortest individual profile, avoiding
+        step artefacts caused by NaN-padding.  Individual profile lines are
+        always drawn at their full length regardless of this setting.
+        When False the NaN-aware mean is computed over the full padded length.
 
     Returns
     -------
@@ -469,11 +473,18 @@ def plot_profiles(radii, profiles, pixel_size=None, title='Radial profiles',
         ax.plot(r_row, p_row, alpha=0.4, label=str(i + 1))
 
     if show_mean and len(profiles) > 1:
-        r_mean = np.nanmean(radii, axis=0)
-        p_mean = np.nanmean(profiles, axis=0)
-        p_std  = np.nanstd(profiles, axis=0)
-        ax.plot(r_mean, p_mean, color='black', linewidth=2, label='mean')
-        ax.fill_between(r_mean, p_mean - p_std, p_mean + p_std,
+        if crop:
+            # Crop to the shortest profile so the mean contains no NaN artefacts
+            min_len = min(int(np.sum(~np.isnan(p))) for p in profiles)
+            r_stat    = np.nanmean(radii[:, :min_len],    axis=0)
+            p_mean    = np.nanmean(profiles[:, :min_len], axis=0)
+            p_std     = np.nanstd( profiles[:, :min_len], axis=0)
+        else:
+            r_stat = np.nanmean(radii,    axis=0)
+            p_mean = np.nanmean(profiles, axis=0)
+            p_std  = np.nanstd( profiles, axis=0)
+        ax.plot(r_stat, p_mean, color='black', linewidth=2, label='mean')
+        ax.fill_between(r_stat, p_mean - p_std, p_mean + p_std,
                         color='black', alpha=0.15, label='±1 std')
 
     ax.set_xlabel(r_label)
